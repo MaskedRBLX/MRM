@@ -1,1 +1,450 @@
-local v0=loadstring or load;local v1={}local function v2(...)local v3="";for v4=1,select('#',...)do v3=v3..string.char(select(v4,...))end;return v3 end;local v5=v2(76,117,97,81);local v6=function(v7)return v7 and type(v7)=="function"and v7 end;local v8=function(v9,v10)local v11="";for v12=1,#v9 do v11=v11..string.char(v9:byte(v12)-1)end;return v11 end;local v13=function(v14)local v15={}local v16=v14:gsub('.',function(c)v15[#v15+1]=c:byte()end)return v15 end;local v17={}v17[1]="\76\117\97\81"v17[2]=string.char(103,101,116,115,101,114,118,105,99,101)local v18=v17[2]local v19=game;local v20=v19[v18]local v21={v20(v17[1]),v20('UserInputService'),v20('RunService'),v20('ReplicatedStorage'),v20('CollectionService')}local v22=v21[1].LocalPlayer;local v23=workspace.CurrentCamera or workspace:FindFirstChildWhichIsA("Camera")local v24=function()if v21[2].TouchEnabled then return v23.ViewportSize/2 end;return v21[2]:GetMouseLocation()end;local v25=function(v26,v27,v28,v29)local v30=tick()+v28;local v31;repeat v31=v29 and v26[v27]or v26:FindFirstChildOfClass(v27)if v31 or v30<tick()then break end;task.wait()until false;return v31 end;local v32={isAlive=false,character={},List={},Connections={},PlayerConnections={},EntityThreads={},Running=false}local v33=function(v34)return v34.Health>0 and not v34.Character:FindFirstChildWhichIsA('ForceField')end;local v34=function(v35)if v35.TeamCheck then return v35:TeamCheck()end;if v35.NPC then return true end;if not v22.Team then return true end;if not v35.Player.Team then return true end;if v35.Player.Team~=v22.Team then return true end;return #v35.Player.Team:GetPlayers()==#v21[1]:GetPlayers()end;v32.IgnoreObject=RaycastParams.new()v32.IgnoreObject.RespectCanCollide=true;v32.Wallcheck=function(v36,v37,v38)if typeof(v38)~='Instance'then local v39={v23,v22.Character}for _,v40 in v32.List do if v40.Targetable then table.insert(v39,v40.Character)end end;if typeof(v38)=='table'then for _,v41 in v38 do table.insert(v39,v41)end end;v38=v32.IgnoreObject;v38.FilterDescendantsInstances=v39 end;return workspace:Raycast(v36,v37-v36,v38)end;v32.getUpdateConnections=function(v42)local v43=v42.Humanoid;return {v43:GetPropertyChangedSignal('Health'):Connect(function()v42.Health=v43.Health end),v43:GetPropertyChangedSignal('MaxHealth'):Connect(function()v42.MaxHealth=v43.MaxHealth end)}end;v32.getEntity=function(v44)for i,v45 in v32.List do if v45.Player==v44 or v45.Character==v44 then return v45,i end end end;v32.addEntity=function(v46,v47,v48)if not v46 then return end;v32.EntityThreads[v46]=task.spawn(function()local v49=v25(v46,'Humanoid',10)local v50=v49 and v25(v49,'RootPart',workspace.StreamingEnabled and 9e9 or 10,true)local v51=v46:WaitForChild('Head',10)or v50;if v49 and v50 then local v52={Connections={},Character=v46,Health=v49.Health,Head=v51,Humanoid=v49,HumanoidRootPart=v50,HipHeight=v49.HipHeight+(v50.Size.Y/2)+(v49.RigType==Enum.HumanoidRigType.R6 and 2 or 0),MaxHealth=v49.MaxHealth,NPC=v47==nil,Player=v47,RootPart=v50,TeamCheck=v48}if v47==v22 then v32.character=v52;v32.isAlive=true else v52.Targetable=v34(v52)for _,v53 in v32.getUpdateConnections(v52)do table.insert(v52.Connections,v53)end;table.insert(v32.List,v52)end end;v32.EntityThreads[v46]=nil end)end;v32.removeEntity=function(v54,v55)if v55 then if v32.isAlive then v32.isAlive=false;for _,v56 in v32.character.Connections do v56:Disconnect()end;table.clear(v32.character.Connections)end;return end;if v54 then if v32.EntityThreads[v54]then task.cancel(v32.EntityThreads[v54])v32.EntityThreads[v54]=nil end;local v57,v58=v32.getEntity(v54)if v58 then for _,v59 in v57.Connections do v59:Disconnect()end;table.clear(v57.Connections)table.remove(v32.List,v58)end end end;v32.refreshEntity=function(v60,v61)v32.removeEntity(v60)v32.addEntity(v60,v61)end;v32.addPlayer=function(v62)if v62.Character then v32.refreshEntity(v62.Character,v62)end;v32.PlayerConnections[v62]={v62.CharacterAdded:Connect(function(v63)v32.refreshEntity(v63,v62)end),v62.CharacterRemoving:Connect(function(v64)v32.removeEntity(v64,v62==v22)end),v62:GetPropertyChangedSignal('Team'):Connect(function()for _,v65 in v32.List do if v65.Targetable~=v34(v65)then v32.refreshEntity(v65.Character,v65.Player)end end;if v62==v22 then v32.start()else v32.refreshEntity(v62.Character,v62)end end)}}end;v32.removePlayer=function(v66)if v32.PlayerConnections[v66]then for _,v67 in v32.PlayerConnections[v66]do v67:Disconnect()end;table.clear(v32.PlayerConnections[v66])v32.PlayerConnections[v66]=nil end;v32.removeEntity(v66)end;v32.start=function()if v32.Running then v32.stop()end;table.insert(v32.Connections,v21[1].PlayerAdded:Connect(function(v68)v32.addPlayer(v68)end))table.insert(v32.Connections,v21[1].PlayerRemoving:Connect(function(v69)v32.removePlayer(v69)end))for _,v70 in v21[1]:GetPlayers()do v32.addPlayer(v70)end;table.insert(v32.Connections,workspace:GetPropertyChangedSignal('CurrentCamera'):Connect(function()v23=workspace.CurrentCamera or workspace:FindFirstChildWhichIsA('Camera')end))v32.Running=true end;v32.stop=function()for _,v71 in v32.Connections do v71:Disconnect()end;for _,v72 in v32.PlayerConnections do for _,v73 in v72 do v73:Disconnect()end;table.clear(v72)end;v32.removeEntity(nil,true)local v74=table.clone(v32.List)for _,v75 in v74 do v32.removeEntity(v75.Character)end;for _,v76 in v32.EntityThreads do task.cancel(v76)end;table.clear(v32.PlayerConnections)table.clear(v32.EntityThreads)table.clear(v32.Connections)table.clear(v74)v32.Running=false end;v32.kill=function()if v32.Running then v32.stop()end end;local v77={SolveTrajectory=function(v78,v79,v80,v81,v82,v83,v84,v85,v86)local v87=1e-9;local function v88(d)return(d>-v87 and d<v87)end;local function v89(x)return(x>0)and math.pow(x,1/3)or -math.pow(math.abs(x),1/3)end;local function v90(c0,c1,c2)local s0,s1;local p=c1/(2*c0);local q=c2/c0;local D=p*p-q;if v88(D)then s0=-p;return s0 elseif D<0 then return else local sqrt_D=math.sqrt(D)s0=sqrt_D-p;s1=-sqrt_D-p;return s0,s1 end end;local function v91(c0,c1,c2,c3)local s0,s1,s2;local num,sub;local A,B,C;local sq_A,p,q;local cb_p,D;if c0==0 then return v90(c1,c2,c3)end;A=c1/c0;B=c2/c0;C=c3/c0;sq_A=A*A;p=(1/3)*(-(1/3)*sq_A+B)q=0.5*((2/27)*A*sq_A-(1/3)*A*B+C)cb_p=p*p*p;D=q*q+cb_p;if v88(D)then if v88(q)then s0=0;num=1 else local u=v89(-q)s0=2*u;s1=-u;num=2 end elseif D<0 then local phi=(1/3)*math.acos(-q/math.sqrt(-cb_p))local t=2*math.sqrt(-p)s0=t*math.cos(phi)s1=-t*math.cos(phi+math.pi/3)s2=-t*math.cos(phi-math.pi/3)num=3 else local sqrt_D=math.sqrt(D)local u=v89(sqrt_D-q)local v=-v89(sqrt_D+q)s0=u+v;num=1 end;sub=(1/3)*A;if num>0 then s0=s0-sub end;if num>1 then s1=s1-sub end;if num>2 then s2=s2-sub end;return s0,s1,s2 end;local function v92(c0,c1,c2,c3,c4)local s0,s1,s2,s3;local coeffs={}local z,u,v,sub;local A,B,C,D;local sq_A,p,q,r;local num;A=c1/c0;B=c2/c0;C=c3/c0;D=c4/c0;sq_A=A*A;p=-0.375*sq_A+B;q=0.125*sq_A*A-0.5*A*B+C;r=-(3/256)*sq_A*sq_A+0.0625*sq_A*B-0.25*A*C+D;if v88(r)then coeffs[3]=q;coeffs[2]=p;coeffs[1]=0;coeffs[0]=1;local results={v91(coeffs[0],coeffs[1],coeffs[2],coeffs[3])}num=#results;s0,s1,s2=results[1],results[2],results[3]else coeffs[3]=0.5*r*p-0.125*q*q;coeffs[2]=-r;coeffs[1]=-0.5*p;coeffs[0]=1;s0,s1,s2=v91(coeffs[0],coeffs[1],coeffs[2],coeffs[3])z=s0;u=z*z-r;v=2*z-p;if v88(u)then u=0 elseif u>0 then u=math.sqrt(u)else return end;if v88(v)then v=0 elseif v>0 then v=math.sqrt(v)else return end;coeffs[2]=z-u;coeffs[1]=q<0 and -v or v;coeffs[0]=1;local results1={v90(coeffs[0],coeffs[1],coeffs[2])}num=#results1;s0,s1=results1[1],results1[2];coeffs[2]=z+u;coeffs[1]=q<0 and v or -v;coeffs[0]=1;if num==0 then local results2={v90(coeffs[0],coeffs[1],coeffs[2])}num=num+#results2;s0,s1=results2[1],results2[2]end;if num==1 then local results2={v90(coeffs[0],coeffs[1],coeffs[2])}num=num+#results2;s1,s2=results2[1],results2[2]end;if num==2 then local results2={v90(coeffs[0],coeffs[1],coeffs[2])}num=num+#results2;s2,s3=results2[1],results2[2]end end;sub=0.25*A;if num>0 then s0=s0-sub end;if num>1 then s1=s1-sub end;if num>2 then s2=s2-sub end;if num>3 then s3=s3-sub end;return {s3,s2,s1,s0}end;local disp=v81-v78;local p,q,r=v82.X,v82.Y,v82.Z;local h,j,k=disp.X,disp.Y,disp.Z;local l=-.5*v80;if math.abs(q)>0.01 and v83 and v83>0 then local estTime=(disp.Magnitude/v79)local origq=q;for i=1,100 do q=origq-(.5*v83)*estTime;local velo=v82*0.016;local ray=workspace:Raycast(Vector3.new(v81.X,v81.Y,v81.Z),Vector3.new(velo.X,(q*estTime)-v84,velo.Z),v86)if ray then local newTarget=ray.Position+Vector3.new(0,v84,0)estTime=estTime-math.sqrt(((v81-newTarget).Magnitude*2)/v83)v81=newTarget;j=(v81-v78).Y;q=0;break else break end end end;local solutions=v92(l*l,-2*q*l,q*q-2*j*l-v79*v79+p*p+r*r,2*j*q+2*h*p+2*k*r,j*j+h*h+k*k)if solutions then local posRoots={}for _,v in solutions do if v>0 then table.insert(posRoots,v)end end;if posRoots[1]then local t=posRoots[1]local d=(h+p*t)/t;local e=(j+q*t-l*t*t)/t;local f=(k+r*t)/t;return v78+Vector3.new(d,e,f)end elseif v80==0 then local t=(disp.Magnitude/v79)local d=(h+p*t)/t;local e=(j+q*t-l*t*t)/t;local f=(k+r*t)/t;return v78+Vector3.new(d,e,f)end end}local v93=function(v94)v94=v94 or{}local v95=v94.MouseOrigin or v24()local v96={}if not v32.isAlive then return nil end;for _,v97 in v32.List do if not v94.Players and v97.Player then goto continue end;if not v94.NPCs and v97.NPC then goto continue end;if not v97.Targetable then goto continue end;local v98=v97[v94.Part or 'RootPart']if not v98 then goto continue end;local v99,v100=v23:WorldToViewportPoint(v98.Position)if not v100 then goto continue end;local v101=(v95-Vector2.new(v99.x,v99.y)).Magnitude;if v101>(v94.Range or 1000)then goto continue end;if v33(v97)then table.insert(v96,{Entity=v97,Magnitude=v101,Position=v99})end;::continue::end;table.sort(v96,v94.Sort or function(a,b)return a.Magnitude<b.Magnitude end)for _,v102 in v96 do if v94.Wallcheck then if v32.Wallcheck(v94.Origin or v32.character.HumanoidRootPart.Position,v102.Entity[v94.Part or 'RootPart'].Position,v94.Wallcheck)then goto nextEnt end end;table.clear(v94)table.clear(v96)return v102.Entity;::nextEnt::end;table.clear(v96)table.clear(v94)return nil end;local v103=nil;local v104={}local v105=function()local v106=0;while v106<100 do v106=v106+1;local v107,v108=pcall(function()return debug.getupvalue(require(v22.PlayerScripts.TS.knit).setup,9)end)if v107 and v108 then local v109=0;while not debug.getupvalue(v108.Start,1)and v109<50 do v109=v109+1;task.wait(0.1)end;if debug.getupvalue(v108.Start,1)then return v108 end end;task.wait(0.1)end;return nil end;local v110=function()v103=v105()if not v103 then return false end;local v111=pcall(function()v104.ProjectileController=v103.Controllers.ProjectileController;v104.BowConstantsTable=debug.getupvalue(v103.Controllers.ProjectileController.enableBeam,8)pcall(function()local v112=debug.getupvalue(v103.Controllers.ProjectileController.launchProjectileWithValues,2)if v112 then v104.ProjectileMeta=debug.getupvalue(v112,1)end end)return true end)return v111 end;local v113=function(v114,v115,v116,v117,v118)if not v114 or not v114.Character or not v115 then return v115 and v115.Position or Vector3.zero end;local v119=v115.Position;local v120=v115.Velocity;local v121=(v119-v118).Magnitude;local v122=v121/v116;local v123=Vector3.new(v120.X,0,v120.Z).Magnitude;local v124=v120.Y;local v125=1.0;if v121>80 then v125=0.95 elseif v121>50 then v125=0.98 elseif v121<20 then v125=1.08 end;local v126=v122*v125;local v127=0.80;if v121>70 then v127=0.70 elseif v121>40 then v127=0.75 elseif v121<25 then v127=0.88 end;local v128=Vector3.new(v120.X,0,v120.Z)*v126*v127;local v129=0;local v130=v124>10;local v131=v124<-15;local v132=math.abs(v124)<3 and v124<1;if v131 then v129=v124*v126*0.32 elseif v130 then v129=v124*v126*0.28 elseif v132 then v129=-2*v126 else v129=v124*v126*0.25 end;return v119+v128+Vector3.new(0,v129,0)end;local v134=function(v135,v136,v137)local v138=0.85;if v137>70 then v138=0.75 elseif v137>40 then v138=0.80 elseif v137<20 then v138=0.92 end;return v135:Lerp(CFrame.new(v135.Position,v136),v138)end;local v139=nil;local v140=false;local v141=function()if v140 or not v104.ProjectileController then return false end;local v142=pcall(function()if not v139 then v139=v104.ProjectileController.calculateImportantLaunchValues end;v104.ProjectileController.calculateImportantLaunchValues=function(...)local v143,v144,v145,v146,v147=...;local v148=RaycastParams.new()v148.FilterType=Enum.RaycastFilterType.Include;v148.FilterDescendantsInstances={workspace:FindFirstChild('Map')or workspace}local v149=v144.projectile:lower()for _,v150 in ipairs(Settings.BlacklistedProjectiles)do if v149==v150:lower()then return v139(...)end end;local v151=v93({Part=Settings.TargetPart,Range=Settings.FOV,Players=Settings.TargetPlayers,NPCs=Settings.TargetNPCs,Wallcheck=Settings.ShootThroughWalls and nil or v148,Origin=v32.isAlive and(v147 or v32.character.RootPart.Position)or Vector3.zero})if v151 and v151.Character and v151[Settings.TargetPart]then local v152=v147 or(v143.getLaunchPosition and v143:getLaunchPosition(v146)or v146)if not v152 then return v139(...)end;if(not Settings.IncludeOtherProjectiles)and not v144.projectile:find('arrow')then return v139(...)end;local v153=v144:getProjectileMeta()or{}local v154=(v145 and v153.predictionLifetimeSec or v153.lifetimeSec or 3)local v155=(v153.gravitationalAcceleration or 196.2)*v144.gravityMultiplier;local v156=(v153.launchVelocity or 100)local v157=v152+(v144.projectile=='owl_projectile'and Vector3.zero or v144.fromPositionOffset)local v158=workspace.Gravity;local v159=v151.Character and v151.Character:GetAttribute('InflatedBalloons')if v159 and v159>0 then v158=workspace.Gravity*math.max(1-(v159*0.05),0.7)end;if v151.Player and v151.Player:GetAttribute('IsOwlTarget')then for _,v160 in v21[5]:GetTagged('Owl')do if v160:GetAttribute('Target')==v151.Player.UserId and v160:GetAttribute('Status')==2 then v158=0;break end end end;local v161=CFrame.new(v157,v151[Settings.TargetPart].Position)local v162=(v151[Settings.TargetPart].Position-v157).Magnitude;local v163=v113(v151.Player,v151[Settings.TargetPart],v156,v155,v157)local v164=v134(v161,v163,v162)if v144.projectile~='owl_projectile'then v164=v164*CFrame.new(v104.BowConstantsTable.RelX or 0,v104.BowConstantsTable.RelY or 0,v104.BowConstantsTable.RelZ or 0)end;local v165=v144.projectile=='telepearl'and Vector3.zero or v151[Settings.TargetPart].Velocity;local v166=v77.SolveTrajectory(v164.p,v156,v155,v163,v165,v158,v151.HipHeight,v151.Jumping and 50 or nil,v148)if v166 then local v167=(v166-v164.p).Unit;local v168=math.acos(math.clamp(v167:Dot(Vector3.new(0,1,0)),-1,1))local v169=math.rad(1)local v170=math.rad(179)if v168>v169 and v168<v170 then return {initialVelocity=v167*v156,positionFrom=v157,deltaT=v154,gravitationalAcceleration=v155,drawDurationSeconds=5}end end end;return v139(...)end;v140=true end)return v142 end;local v171=function()if not v140 or not v104.ProjectileController then return false end;local v172=pcall(function()if v139 then v104.ProjectileController.calculateImportantLaunchValues=v139;v139=nil;v140=false end end)return v172 end;local v173=false;local v174=function()if v173 then return end;repeat task.wait()until game:IsLoaded()if not v110()then warn("ProjectileAimbot: BedWars not found or failed to load.")return end;v32.start()table.insert(v1,{Disconnect=function()v32.stop()end})if Settings.Enabled then v141()end;if Settings.EnableToggleKey and Settings.ToggleKey then local v175=Enum.KeyCode[Settings.ToggleKey]if v175 then local v176=v21[2].InputBegan:Connect(function(v177,v178)if v178 then return end;if v177.KeyCode==v175 then if v140 then v171()else v141()end end end)table.insert(v1,v176)else warn("ProjectileAimbot: Invalid toggle key '"..tostring(Settings.ToggleKey).."'. Check spelling.")end end;v173=true;print("ProjectileAimbot standalone loaded. Press "..(Settings.ToggleKey or "NONE").." to toggle.")end;local v179=getgenv().ProjectileAimbotInstances;if v179 then for _,v180 in pairs(v179)do pcall(v180)end end;getgenv().ProjectileAimbotInstances={}local v181=function()for _,v182 in v1 do pcall(function()if type(v182)=="thread"then task.cancel(v182)elseif v182.Disconnect then v182:Disconnect()elseif v182.destroy then v182:destroy()end end)end;table.clear(v1)if v171 then v171()end;if v32.Running then v32.stop()end end;table.insert(getgenv().ProjectileAimbotInstances,v181)local v183;v183=game.DescendantRemoving:Connect(function(v184)if v184==script then v181()if v183 then v183:Disconnect()end end end)v174()
+local Z1 = {
+    _1 = true,
+    _2 = 600,
+    _3 = "RootPart",
+    _4 = true,
+    _5 = false,
+    _6 = false,
+    _7 = false,
+    _8 = {"telepearl", "telepearls"},
+    _9 = true,
+    _A = "P"
+}
+local Z2 = (cloneref or function(o) return o end)
+local Z3 = Z2(game:GetService(ZC({80,108,97,121,101,114,115}))).LocalPlayer
+local Z4 = workspace.CurrentCamera or workspace:FindFirstChildWhichIsA(ZC({67,97,109,101,114,97}))
+local Z5 = Z2(game:GetService(ZC({85,115,101,114,73,110,112,117,116,83,101,114,118,105,99,101})))
+local Z6 = Z2(game:GetService(ZC({67,111,108,108,101,99,116,105,111,110,83,101,114,118,105,99,101})))
+local function Z7()
+    if Z5.TouchEnabled then return Z4.ViewportSize / 2 end
+    return Z5:GetMouseLocation()
+end
+local function Z8(o, n, t, m)
+    local et = tick() + t
+    local r
+    repeat
+        r = m and o[n] or o:FindFirstChildOfClass(n)
+        if r or et < tick() then break end
+        task.wait()
+    until false
+    return r
+end
+local Z9 = {
+    _B = false,
+    _C = {},
+    _D = {},
+    _E = {},
+    _F = {},
+    _G = {},
+    _H = false
+}
+function Z9._I(e) return e.Health > 0 and not e.Character:FindFirstChildWhichIsA(ZC({70,111,114,99,101,70,105,101,108,100})) end
+function Z9._J(e)
+    if e.TeamCheck then return e:TeamCheck() end
+    if e.NPC then return true end
+    if not Z3.Team then return true end
+    if not e.Player.Team then return true end
+    if e.Player.Team ~= Z3.Team then return true end
+    return #e.Player.Team:GetPlayers() == #game:GetService(ZC({80,108,97,121,101,114,115})):GetPlayers()
+end
+Z9.IgnoreObject = RaycastParams.new()
+Z9.IgnoreObject.RespectCanCollide = true
+function Z9._K(orig, dest, ign)
+    if typeof(ign) ~= 'Instance' then
+        local lst = {Z4, Z3.Character}
+        for _, v in Z9._D do if v.Targetable then table.insert(lst, v.Character) end end
+        if typeof(ign) == 'table' then for _, v in ign do table.insert(lst, v) end end
+        ign = Z9.IgnoreObject; ign.FilterDescendantsInstances = lst
+    end
+    return workspace:Raycast(orig, dest - orig, ign)
+end
+function Z9._L(e)
+    local h = e.Humanoid
+    return {
+        h:GetPropertyChangedSignal(ZC({72,101,97,108,116,104})):Connect(function() e.Health = h.Health end),
+        h:GetPropertyChangedSignal(ZC({77,97,120,72,101,97,108,116,104})):Connect(function() e.MaxHealth = h.MaxHealth end)
+    }
+end
+function Z9._M(ch)
+    for i, v in Z9._D do
+        if v.Player == ch or v.Character == ch then return v, i end
+    end
+end
+function Z9._N(ch, plr, tf)
+    if not ch then return end
+    Z9._G[ch] = task.spawn(function()
+        local hum = Z8(ch, ZC({72,117,109,97,110,111,105,100}), 10)
+        local hrp = hum and Z8(hum, ZC({82,111,111,116,80,97,114,116}), workspace.StreamingEnabled and 9e9 or 10, true)
+        local head = ch:WaitForChild(ZC({72,101,97,100}), 10) or hrp
+        if hum and hrp then
+            local ent = {
+                Connections = {}, Character = ch, Health = hum.Health, Head = head, Humanoid = hum,
+                HumanoidRootPart = hrp,
+                HipHeight = hum.HipHeight + (hrp.Size.Y / 2) + (hum.RigType == Enum.HumanoidRigType.R6 and 2 or 0),
+                MaxHealth = hum.MaxHealth, NPC = plr == nil, Player = plr, RootPart = hrp, TeamCheck = tf
+            }
+            if plr == Z3 then
+                Z9._C = ent
+                Z9._B = true
+            else
+                ent.Targetable = Z9._J(ent)
+                for _, c in Z9._L(ent) do table.insert(ent.Connections, c) end
+                table.insert(Z9._D, ent)
+            end
+        end
+        Z9._G[ch] = nil
+    end)
+end
+function Z9._O(ch, localcheck)
+    if localcheck then
+        if Z9._B then
+            Z9._B = false
+            for _, v in Z9._C.Connections do v:Disconnect() end
+            table.clear(Z9._C.Connections)
+        end
+        return
+    end
+    if ch then
+        if Z9._G[ch] then task.cancel(Z9._G[ch]) Z9._G[ch] = nil end
+        local e, i = Z9._M(ch)
+        if i then
+            for _, v in e.Connections do v:Disconnect() end
+            table.clear(e.Connections)
+            table.remove(Z9._D, i)
+        end
+    end
+end
+function Z9._P(ch, plr) Z9._O(ch) Z9._N(ch, plr) end
+function Z9._Q(plr)
+    if plr.Character then Z9._P(plr.Character, plr) end
+    Z9._F[plr] = {
+        plr.CharacterAdded:Connect(function(ch) Z9._P(ch, plr) end),
+        plr.CharacterRemoving:Connect(function(ch) Z9._O(ch, plr == Z3) end),
+        plr:GetPropertyChangedSignal(ZC({84,101,97,109})):Connect(function()
+            for _, v in Z9._D do
+                if v.Targetable ~= Z9._J(v) then Z9._P(v.Character, v.Player) end
+            end
+            if plr == Z3 then Z9.start() else Z9._P(plr.Character, plr) end
+        end)
+    }
+end
+function Z9._R(plr)
+    if Z9._F[plr] then
+        for _, v in Z9._F[plr] do v:Disconnect() end
+        table.clear(Z9._F[plr])
+        Z9._F[plr] = nil
+    end
+    Z9._O(plr)
+end
+function Z9.start()
+    if Z9._H then Z9.stop() end
+    table.insert(Z9._E, game:GetService(ZC({80,108,97,121,101,114,115})).PlayerAdded:Connect(function(p) Z9._Q(p) end))
+    table.insert(Z9._E, game:GetService(ZC({80,108,97,121,101,114,115})).PlayerRemoving:Connect(function(p) Z9._R(p) end))
+    for _, p in game:GetService(ZC({80,108,97,121,101,114,115})):GetPlayers() do Z9._Q(p) end
+    table.insert(Z9._E, workspace:GetPropertyChangedSignal(ZC({67,117,114,114,101,110,116,67,97,109,101,114,97})):Connect(function()
+        Z4 = workspace.CurrentCamera or workspace:FindFirstChildWhichIsA(ZC({67,97,109,101,114,97}))
+    end))
+    Z9._H = true
+end
+function Z9.stop()
+    for _, c in Z9._E do c:Disconnect() end
+    for _, v in Z9._F do for _, c in v do c:Disconnect() end table.clear(v) end
+    Z9._O(nil, true)
+    local cl = table.clone(Z9._D)
+    for _, e in cl do Z9._O(e.Character) end
+    for _, t in Z9._G do task.cancel(t) end
+    table.clear(Z9._F) table.clear(Z9._G) table.clear(Z9._E) table.clear(cl)
+    Z9._H = false
+end
+local ZA = {}
+function ZA._S(orig, spd, grav, tpos, tvel, pg, ph, pj, prms)
+    local eps = 1e-9
+    local function iZ(d) return d > -eps and d < eps end
+    local function cbrt(x) return x > 0 and math.pow(x, 1 / 3) or -math.pow(math.abs(x), 1 / 3) end
+    local function sQ(c0, c1, c2)
+        local p = c1 / (2 * c0) local q = c2 / c0 local D = p * p - q
+        if iZ(D) then return -p elseif D < 0 then return else local s = math.sqrt(D) return s - p, -s - p end
+    end
+    local function sC(c0, c1, c2, c3)
+        if c0 == 0 then return sQ(c1, c2, c3) end
+        local A = c1 / c0 B = c2 / c0 C = c3 / c0 sq_A = A * A p = (1 / 3) * (-1 / 3 * sq_A + B) q = 0.5 * (2 / 27 * A * sq_A - 1 / 3 * A * B + C)
+        local cb_p = p * p * p D = q * q + cb_p local num = 0 sub = (1 / 3) * A
+        if iZ(D) then
+            if iZ(q) then s0 = 0 num = 1 else local u = cbrt(-q) s0 = 2 * u; s1 = -u; num = 2 end
+        elseif D < 0 then
+            local phi = 1 / 3 * math.acos(-q / math.sqrt(-cb_p)) local t = 2 * math.sqrt(-p)
+            s0 = t * math.cos(phi) s1 = -t * math.cos(phi + math.pi / 3) s2 = -t * math.cos(phi - math.pi / 3) num = 3
+        else
+            local sD = math.sqrt(D) local u = cbrt(sD - q) local v = -cbrt(sD + q) s0 = u + v; num = 1
+        end
+        if num > 0 then s0 = s0 - sub end if num > 1 then s1 = s1 - sub end if num > 2 then s2 = s2 - sub end
+        return s0, s1, s2
+    end
+    local function sQ4(c0, c1, c2, c3, c4)
+        local A = c1 / c0 B = c2 / c0 C = c3 / c0 D = c4 / c0 sq_A = A * A p = -0.375 * sq_A + B q = 0.125 * sq_A * A - 0.5 * A * B + C
+        r = -(3 / 256) * sq_A * sq_A + 0.0625 * sq_A * B - 0.25 * A * C + D
+        local coeffs, num, s0, s1, s2, s3, z, u, v
+        if iZ(r) then
+            coeffs = {1, 0, p, q} local res = {sC(1, 0, p, q)} num = #res; s0, s1, s2 = res[1], res[2], res[3]
+        else
+            coeffs = {1, -0.5 * p, -r, 0.5 * r * p - 0.125 * q * q}
+            s0, s1, s2 = sC(coeffs[1], coeffs[2], coeffs[3], coeffs[4])
+            z = s0
+            u = z * z - r v = 2 * z - p
+            if iZ(u) then u = 0 elseif u > 0 then u = math.sqrt(u) else return end
+            if iZ(v) then v = 0 elseif v > 0 then v = math.sqrt(v) else return end
+            coeffs = {1, q < 0 and -v or v, z - u}
+            local r1 = {sQ(1, coeffs[2], coeffs[3])} num = #r1; s0, s1 = r1[1], r1[2]
+            coeffs[2] = q < 0 and v or -v; coeffs[3] = z + u
+            if num == 0 then local r2 = {sQ(1, coeffs[2], coeffs[3])} num = num + #r2; s0, s1 = r2[1], r2[2] end
+            if num == 1 then local r2 = {sQ(1, coeffs[2], coeffs[3])} num = num + #r2; s1, s2 = r2[1], r2[2] end
+            if num == 2 then local r2 = {sQ(1, coeffs[2], coeffs[3])} num = num + #r2; s2, s3 = r2[1], r2[2] end
+        end
+        sub = 0.25 * A
+        if num > 0 then s0 = s0 - sub end if num > 1 then s1 = s1 - sub end if num > 2 then s2 = s2 - sub end if num > 3 then s3 = s3 - sub end
+        return {s3, s2, s1, s0}
+    end
+    local disp = tpos - orig local p, q, r = tvel.X, tvel.Y, tvel.Z local h, j, k = disp.X, disp.Y, disp.Z local l = -0.5 * grav
+    if math.abs(q) > 0.01 and pg and pg > 0 then
+        local et = disp.Magnitude / spd local oq = q
+        for i = 1, 100 do
+            q = oq - 0.5 * pg * et
+            local velo = tvel * 0.016
+            local ray = workspace:Raycast(Vector3.new(tpos.X, tpos.Y, tpos.Z), Vector3.new(velo.X, q * et - ph, velo.Z), prms)
+            if ray then
+                local nt = ray.Position + Vector3.new(0, ph, 0)
+                et = et - math.sqrt(((tpos - nt).Magnitude * 2) / pg)
+                tpos = nt j = (tpos - orig).Y q = 0 break
+            else break end
+        end
+    end
+    local sol = sQ4(l * l, -2 * q * l, q * q - 2 * j * l - spd * spd + p * p + r * r, 2 * j * q + 2 * h * p + 2 * k * r, j * j + h * h + k * k)
+    if sol then
+        local posRoots = {} for _, t in sol do if t > 0 then table.insert(posRoots, t) end end
+        if posRoots[1] then
+            local t = posRoots[1]
+            return orig + Vector3.new((h + p * t) / t, (j + q * t - l * t * t) / t, (k + r * t) / t)
+        end
+    elseif grav == 0 then
+        local t = disp.Magnitude / spd
+        return orig + Vector3.new((h + p * t) / t, (j + q * t - l * t * t) / t, (k + r * t) / t)
+    end
+end
+local function ZB(opts)
+    opts = opts or {}
+    local mp = opts.MouseOrigin or Z7()
+    local st = {}
+    if not Z9._B then return end
+    for _, e in Z9._D do
+        if not opts.Players and e.Player then goto cont end
+        if not opts.NPCs and e.NPC then goto cont end
+        if not e.Targetable then goto cont end
+        local part = e[opts.Part or ZC({82,111,111,116,80,97,114,116})]
+        if not part then goto cont end
+        local pos, vis = Z4:WorldToViewportPoint(part.Position)
+        if not vis then goto cont end
+        local mag = (mp - Vector2.new(pos.x, pos.y)).Magnitude
+        if mag > (opts.Range or 1000) then goto cont end
+        if Z9._I(e) then table.insert(st, {Entity = e, Magnitude = mag, Position = pos}) end
+        ::cont::
+    end
+    table.sort(st, opts.Sort or function(a, b) return a.Magnitude < b.Magnitude end)
+    for _, v in st do
+        if opts.Wallcheck and Z9._K(opts.Origin or Z9._C.HumanoidRootPart.Position, v.Entity[opts.Part or ZC({82,111,111,116,80,97,114,116})].Position, opts.Wallcheck) then goto skip end
+        table.clear(opts) table.clear(st) return v.Entity
+        ::skip::
+    end
+    table.clear(st) table.clear(opts)
+end
+local ZC = function(arr) return string.char(unpack(arr)) end
+local ZD, ZE = nil, {}
+local function ZF()
+    for _ = 1, 100 do
+        local ok, mod = pcall(function() return debug.getupvalue(require(Z3.PlayerScripts.TS.knit).setup, 9) end)
+        if ok and mod then
+            for _ = 1, 50 do if debug.getupvalue(mod.Start, 1) then return mod end task.wait(0.1) end
+        end
+        task.wait(0.1)
+    end
+end
+local function ZG()
+    ZD = ZF() if not ZD then return false end
+    return pcall(function()
+        ZE.ProjectileController = ZD.Controllers.ProjectileController
+        ZE.BowConstantsTable = debug.getupvalue(ZD.Controllers.ProjectileController.enableBeam, 8)
+        pcall(function()
+            local f = debug.getupvalue(ZD.Controllers.ProjectileController.launchProjectileWithValues, 2)
+            if f then ZE.ProjectileMeta = debug.getupvalue(f, 1) end
+        end)
+        return true
+    end)
+end
+local function ZH(tplr, tpart, speed, grav, orig)
+    if not tplr or not tplr.Character or not tpart then return tpart and tpart.Position or Vector3.zero end
+    local pos = tpart.Position; local vel = tpart.Velocity; local dist = (pos - orig).Magnitude
+    local base = dist / speed
+    local mult = 1; if dist > 80 then mult = 0.95 elseif dist > 50 then mult = 0.98 elseif dist < 20 then mult = 1.08 end
+    local time = base * mult
+    local hs = 0.8; if dist > 70 then hs = 0.7 elseif dist > 40 then hs = 0.75 elseif dist < 25 then hs = 0.88 end
+    local hvel = Vector3.new(vel.X, 0, vel.Z) * time * hs
+    local vvel = vel.Y; local vpred = 0
+    if vvel < -15 then vpred = vvel * time * 0.32
+    elseif vvel > 10 then vpred = vvel * time * 0.28
+    elseif math.abs(vvel) < 3 and vvel < 1 then vpred = -2 * time
+    else vpred = vvel * time * 0.25 end
+    return pos + hvel + Vector3.new(0, vpred, 0)
+end
+local function ZI(cf, targ, dist)
+    local fac = 0.85; if dist > 70 then fac = 0.75 elseif dist > 40 then fac = 0.8 elseif dist < 20 then fac = 0.92 end
+    return cf:Lerp(CFrame.new(cf.Position, targ), fac)
+end
+local ZJ = nil
+local ZK = false
+local function ZL()
+    if ZK or not ZE.ProjectileController then return false end
+    return pcall(function()
+        if not ZJ then ZJ = ZE.ProjectileController.calculateImportantLaunchValues end
+        ZE.ProjectileController.calculateImportantLaunchValues = function(...)
+            local self, meta, wmeta, orig, shootpos = ...
+            local rc = RaycastParams.new(); rc.FilterType = Enum.RaycastFilterType.Include
+            rc.FilterDescendantsInstances = {workspace:FindFirstChild(ZC({77,97,112})) or workspace}
+
+            local pname = meta.projectile:lower()
+            for _, bl in ipairs(Z1._8) do
+                if pname == bl:lower() then return ZJ(...) end
+            end
+
+            local plr = ZB({
+                Part = Z1._3, Range = Z1._2, Players = Z1._4, NPCs = Z1._5,
+                Wallcheck = Z1._6 and nil or rc,
+                Origin = Z9._B and (shootpos or Z9._C.RootPart.Position) or Vector3.zero
+            })
+
+            if plr and plr.Character and plr[Z1._3] then
+                local pos = shootpos or (self.getLaunchPosition and self:getLaunchPosition(orig) or orig)
+                if not pos then return ZJ(...) end
+
+                if (not Z1._7) and not meta.projectile:find(ZC({97,114,114,111,119})) then
+                    return ZJ(...)
+                end
+
+                local metaTable = meta:getProjectileMeta() or {}
+                local lifetime = (wmeta and metaTable.predictionLifetimeSec or metaTable.lifetimeSec or 3)
+                local grav = (metaTable.gravitationalAcceleration or 196.2) * meta.gravityMultiplier
+                local projSpeed = (metaTable.launchVelocity or 100)
+                local offsetpos = pos + (meta.projectile == ZC({111,119,108,95,112,114,111,106,101,99,116,105,108,101}) and Vector3.zero or meta.fromPositionOffset)
+
+                local playerGrav = workspace.Gravity
+                local balloons = plr.Character and plr.Character:GetAttribute(ZC({73,110,102,108,97,116,101,100,66,97,108,108,111,111,110,115}))
+                if balloons and balloons > 0 then
+                    playerGrav = workspace.Gravity * math.max(1 - (balloons * 0.05), 0.7)
+                end
+                if plr.Player and plr.Player:GetAttribute(ZC({73,115,79,119,108,84,97,114,103,101,116})) then
+                    for _, owl in Z6:GetTagged(ZC({79,119,108})) do
+                        if owl:GetAttribute(ZC({84,97,114,103,101,116})) == plr.Player.UserId and owl:GetAttribute(ZC({83,116,97,116,117,115})) == 2 then
+                            playerGrav = 0
+                            break
+                        end
+                    end
+                end
+
+                local rawLook = CFrame.new(offsetpos, plr[Z1._3].Position)
+                local dist = (plr[Z1._3].Position - offsetpos).Magnitude
+                local predicted = ZH(plr.Player, plr[Z1._3], projSpeed, grav, offsetpos)
+                local newlook = ZI(rawLook, predicted, dist)
+
+                if meta.projectile ~= ZC({111,119,108,95,112,114,111,106,101,99,116,105,108,101}) then
+                    newlook = newlook * CFrame.new(
+                        ZE.BowConstantsTable.RelX or 0,
+                        ZE.BowConstantsTable.RelY or 0,
+                        ZE.BowConstantsTable.RelZ or 0
+                    )
+                end
+
+                local targetVel = meta.projectile == ZC({116,101,108,101,112,101,97,114,108}) and Vector3.zero or plr[Z1._3].Velocity
+
+                local calc = ZA._S(newlook.p, projSpeed, grav, predicted, targetVel, playerGrav, plr.HipHeight, plr.Jumping and 50 or nil, rc)
+
+                if calc then
+                    local dir = (calc - newlook.p).Unit
+                    local angle = math.acos(math.clamp(dir:Dot(Vector3.new(0, 1, 0)), -1, 1))
+                    if angle > math.rad(1) and angle < math.rad(179) then
+                        return {
+                            initialVelocity = dir * projSpeed,
+                            positionFrom = offsetpos,
+                            deltaT = lifetime,
+                            gravitationalAcceleration = grav,
+                            drawDurationSeconds = 5
+                        }
+                    end
+                end
+            end
+            return ZJ(...)
+        end
+        ZK = true
+    end)
+end
+local function ZM()
+    if not ZK or not ZE.ProjectileController then return false end
+    return pcall(function()
+        if ZJ then
+            ZE.ProjectileController.calculateImportantLaunchValues = ZJ
+            ZJ = nil
+            ZK = false
+        end
+    end)
+end
+local ZN = {}
+local function ZO(c) table.insert(ZN, c) end
+local function ZP()
+    for _, cn in ipairs(ZN) do
+        pcall(function()
+            if type(cn) == "thread" then task.cancel(cn)
+            elseif cn.Disconnect then cn:Disconnect()
+            elseif cn.destroy then cn:destroy() end
+        end)
+    end
+    table.clear(ZN)
+end
+local ZQ = false
+local function ZR()
+    if ZQ then return end
+    repeat task.wait() until game:IsLoaded()
+    if not ZG() then warn(ZC({65,105,109,98,111,116,58,32,66,101,100,87,97,114,115,32,110,111,116,32,102,111,117,110,100,46})) return end
+    Z9.start()
+    ZO({Disconnect = function() Z9.stop() end})
+    if Z1._1 then ZL() end
+    if Z1._9 and Z1._A then
+        local key = Enum.KeyCode[Z1._A]
+        if key then
+            local conn = Z5.InputBegan:Connect(function(input, gp)
+                if gp then return end
+                if input.KeyCode == key then
+                    if ZK then ZM() else ZL() end
+                end
+            end)
+            ZO(conn)
+        else
+            warn(ZC({73,110,118,97,108,105,100,32,116,111,103,103,108,101,32,107,101,121,58,32}) .. tostring(Z1._A))
+        end
+    end
+    ZQ = true
+    print(ZC({65,105,109,98,111,116,32,108,111,97,100,101,100,46,32,84,111,103,103,108,101,58,32}) .. (Z1._A or ZC({78,79,78,69})))
+end
+local oldInstances = getgenv().ProjectileAimbotInstances
+if oldInstances then for _, f in pairs(oldInstances) do pcall(f) end end
+getgenv().ProjectileAimbotInstances = {}
+local function ZS()
+    ZP()
+    if ZM then ZM() end
+    if Z9._H then Z9.stop() end
+end
+table.insert(getgenv().ProjectileAimbotInstances, ZS)
+local scriptConn
+scriptConn = game.DescendantRemoving:Connect(function(desc)
+    if desc == script then
+        ZS()
+        if scriptConn then scriptConn:Disconnect() end
+    end
+end)
+ZR()
