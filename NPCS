@@ -31,15 +31,17 @@ end
 
 local cfg = unhide({
     1,       
-    1016,    
+    1016,   
     1,       
     1190,    
-    0,      
+    0,       
+    0,       
     1,       
     0,       
     1,       
-    1080,    
-    1000,   
+    1,       
+    1080,   
+    1000,    
 })
 
 local MAX_SERVER_REACH = 7.9
@@ -47,7 +49,7 @@ local MAX_SERVER_REACH = 7.9
 local function root() return me.Character and me.Character:FindFirstChild("HumanoidRootPart") end
 local function hum()  return me.Character and me.Character:FindFirstChild("Humanoid") end
 
--- Entity lib (original logic, just renamed)
+
 local cloneref = cloneref or function(o) return o end
 local playersService = cloneref(jail)
 local localPlayer    = playersService.LocalPlayer
@@ -609,3 +611,5 @@ if cfg.hitboxes and bedReady then
     applyHitboxes(true, cfg.hitboxExpand)
 end
 
+print("[Killaura] MAX SPEED | REACH BYPASS 7.9 | Q toggle")
+print("[Killaura] Range: " .. tostring(cfg.range) .. " studs")
