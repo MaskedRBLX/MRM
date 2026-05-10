@@ -1,8 +1,4 @@
--- BLACK THEMED -- PROJECTILE AIMBOT -- FOR PERSONAL USE ONLY --
--- This script is intentionally obfuscated to prevent casual editing.
--- All configuration values have been embedded directly into the code.
--- Modifying this script requires advanced Lua knowledge.
--- Original functionality is preserved 100%.
+
 
 local c1 = cloneref or function(o) return o end
 local r1 = function(f) f() end
