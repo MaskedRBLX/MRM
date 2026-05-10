@@ -10,7 +10,7 @@ local me = jail.LocalPlayer
 local mouse = me:GetMouse()
 local abyss = pit.CurrentCamera
 
--- === HIDDEN CONFIG (just shift all numbers by 1000) ===
+
 local function reveal(raw)
 local s = 1000
 return {
@@ -34,7 +34,7 @@ local cfg = reveal({
 1040,
 1, 
 1185, -- angleDeg (190+1000)
-1, 
+0, 
 1, 
 1, 
 0, 
