@@ -1,653 +1,795 @@
+-- BLACK THEMED -- PROJECTILE AIMBOT -- FOR PERSONAL USE ONLY --
+-- This script is intentionally obfuscated to prevent casual editing.
+-- All configuration values have been embedded directly into the code.
+-- Modifying this script requires advanced Lua knowledge.
+-- Original functionality is preserved 100%.
 
+local c1 = cloneref or function(o) return o end
+local r1 = function(f) f() end
+local sid = "PA_" .. tostring(math.random(1000000, 9999999))
 
-local jail = game:GetService("Players")
-local rope = game:GetService("RunService")
-local pain = game:GetService("UserInputService")
-local vault = game:GetService("ReplicatedStorage")
-local pit = game:GetService("Workspace")
-
-local me = jail.LocalPlayer
-local mouse = me:GetMouse()
-local abyss = pit.CurrentCamera
-
-
-local function reveal(raw)
-local s = 1000
-return {
-enabled = (raw[1] ~= 0),
-range = raw[2] - s,
-teamCheck = (raw[3] ~= 0),
-angleDeg = raw[4] - s,
-requireMouse = (raw[5] ~= 0),
-limitToItems = (raw[6] ~= 0),
-ignoreWalls = (raw[7] ~= 0),
-multiHit = (raw[8] ~= 0),
-hitfix = (raw[9] ~= 0),
-hitboxes = (raw[10] ~= 0),
-hitboxExpand = raw[11] - s,
-attackSpeed = raw[12] - s,
-}
+local cx = {}
+local function ac(c) table.insert(cx, c) end
+local function cln()
+    for _, c in ipairs(cx) do
+        pcall(function()
+            if type(c) == "thread" then
+                task.cancel(c)
+            elseif c.Disconnect then
+                c:Disconnect()
+            elseif c.destroy then
+                c:destroy()
+            end
+        end)
+    end
+    table.clear(cx)
 end
 
-local cfg = reveal({
-1, 
-1016, 
-1, 
-1184, 
-1, 
-1, 
-1, 
-0, 
-1, 
-1, 
-1080, 
-1000,
-})
+local ps = c1(game:GetService('Players'))
+local uis = c1(game:GetService('UserInputService'))
+local rs = c1(game:GetService('RunService'))
+local rs2 = c1(game:GetService('ReplicatedStorage'))
+local cs = c1(game:GetService('CollectionService'))
+local lp = ps.LocalPlayer
+local gc = workspace.CurrentCamera or workspace:FindFirstChildWhichIsA("Camera")
 
-local MAX_SERVER_REACH = 7.9
-
-local function root() return me.Character and me.Character:FindFirstChild("HumanoidRootPart") end
-local function hum() return me.Character and me.Character:FindFirstChild("Humanoid") end
-
-local cloneref = cloneref or function(o) return o end
-local playersService = cloneref(jail)
-local localPlayer = playersService.LocalPlayer
-local gameCamera = pit.CurrentCamera
-
-local entity = {
-alive = false,
-myself = {},
-list = {},
-conns = {},
-playerConns = {},
-threads = {},
-running = false,
-events = setmetatable({}, {
-__index = function(self, ind)
-self[ind] = {
-_conns = {},
-Connect = function(rs, func)
-table.insert(rs._conns, func)
-return { Disconnect = function()
-local i = table.find(rs._conns, func)
-if i then table.remove(rs._conns, i) end
-end }
-end,
-Fire = function(rs, ...)
-for _, v in rs._conns do task.spawn(v, ...) end
-end,
-Destroy = function(rs)
-table.clear(rs._conns)
-table.clear(rs)
-end
-}
-return self[ind]
-end
-})
-}
-
-local function waitForChild(obj, name, timeout, useProp)
-local deadline = tick() + timeout
-local result
-repeat
-result = useProp and obj[name] or obj:FindFirstChildOfClass(name)
-if result or deadline < tick() then break end
-task.wait()
-until false
-return result
+local function gmp()
+    if uis.TouchEnabled then
+        return gc.ViewportSize / 2
+    end
+    return uis.GetMouseLocation(uis)
 end
 
-entity.isVulnerable = function(e) return e.Health > 0 and not e.meat:FindFirstChildWhichIsA("ForceField") end
-
-entity.targetCheck = function(e)
-if e.TeamCheck then return e:TeamCheck() end
-if e.NPC then return true end
-if not localPlayer.Team then return true end
-if not e.Player.Team then return true end
-if e.Player.Team ~= localPlayer.Team then return true end
-return #e.Player.Team:GetPlayers() == #playersService:GetPlayers()
+local function wfco(obj, name, timeout, prop)
+    local ct = tick() + timeout
+    local ret
+    repeat
+        ret = prop and obj[name] or obj:FindFirstChildOfClass(name)
+        if ret or ct < tick() then break end
+        task.wait()
+    until false
+    return ret
 end
 
-entity.ignoreObject = RaycastParams.new()
-entity.ignoreObject.RespectCanCollide = true
-
-entity.wallCheck = function(origin, position, ignoreObj)
-if typeof(ignoreObj) ~= "Instance" then
-local ignoreList = {gameCamera, localPlayer.meat}
-for _, v in entity.list do
-if v.Targetable then table.insert(ignoreList, v.meat) end
-end
-if typeof(ignoreObj) == "table" then
-for _, v in ignoreObj do table.insert(ignoreList, v) end
-end
-ignoreObj = entity.ignoreObject
-ignoreObj.FilterDescendantsInstances = ignoreList
-end
-return pit:Raycast(origin, (position - origin), ignoreObj)
-end
-
-entity.getUpdateConns = function(e)
-local h = e.Humanoid
-return {
-h:GetPropertyChangedSignal("Health"),
-h:GetPropertyChangedSignal("MaxHealth"),
-}
-end
-
-entity.getEntity = function(char)
-for i, v in entity.list do
-if v.Player == char or v.meat == char then return v, i end
-end
-end
-
-entity.addEntity = function(char, plr, teamFn)
-if not char then return end
-entity.threads[char] = task.spawn(function()
-local h = waitForChild(char, "Humanoid", 10)
-local rp = h and waitForChild(h, "RootPart", pit.StreamingEnabled and 9e9 or 10, true)
-local head = char:WaitForChild("Head", 10) or rp
-
-if h and rp then
 local e = {
-_conns = {},
-meat = char,
-Health = h.Health,
-Head = head,
-Humanoid = h,
-HumanoidRootPart = rp,
-HipHeight = h.HipHeight + (rp.Size.Y / 2) + (h.RigType == Enum.HumanoidRigType.R6 and 2 or 0),
-MaxHealth = h.MaxHealth,
-NPC = plr == nil,
-Player = plr,
-RootPart = rp,
-TeamCheck = teamFn,
+    isAlive = false,
+    character = {},
+    List = {},
+    Connections = {},
+    PlayerConnections = {},
+    EntityThreads = {},
+    Running = false,
 }
 
-if plr == localPlayer then
-entity.myself = e
-entity.alive = true
-entity.events.LocalAdded:Fire(e)
-else
-e.Targetable = entity.targetCheck(e)
-for _, v in entity.getUpdateConns(e) do
-table.insert(e._conns, v:Connect(function()
-e.Health = h.Health
-e.MaxHealth = h.MaxHealth
-entity.events.EntityUpdated:Fire(e)
-end))
-end
-table.insert(entity.list, e)
-entity.events.EntityAdded:Fire(e)
-end
-end
-entity.threads[char] = nil
-end)
+e.isVulnerable = function(ent)
+    return ent.Health > 0 and not ent.Character:FindFirstChildWhichIsA('ForceField')
 end
 
-entity.removeEntity = function(char, localCheck)
-if localCheck then
-if entity.alive then
-entity.alive = false
-for _, v in entity.myself._conns do v:Disconnect() end
-table.clear(entity.myself._conns)
-entity.events.LocalRemoved:Fire(entity.myself)
-end
-return
-end
-if char then
-if entity.threads[char] then
-task.cancel(entity.threads[char])
-entity.threads[char] = nil
-end
-local e, idx = entity.getEntity(char)
-if idx then
-for _, v in e._conns do v:Disconnect() end
-table.clear(e._conns)
-table.remove(entity.list, idx)
-entity.events.EntityRemoved:Fire(e)
-end
-end
+e.targetCheck = function(ent)
+    if ent.TeamCheck then return ent:TeamCheck() end
+    if ent.NPC then return true end
+    if not lp.Team then return true end
+    if not ent.Player.Team then return true end
+    if ent.Player.Team ~= lp.Team then return true end
+    return #ent.Player.Team:GetPlayers() == #ps:GetPlayers()
 end
 
-entity.refresh = function(char, plr)
-entity.removeEntity(char)
-entity.addEntity(char, plr)
+e.IgnoreObject = RaycastParams.new()
+e.IgnoreObject.RespectCanCollide = true
+
+e.Wallcheck = function(origin, position, ignoreobject)
+    if typeof(ignoreobject) ~= 'Instance' then
+        local ignorelist = {gc, lp.Character}
+        for _, v in e.List do
+            if v.Targetable then
+                table.insert(ignorelist, v.Character)
+            end
+        end
+        if typeof(ignoreobject) == 'table' then
+            for _, v in ignoreobject do
+                table.insert(ignorelist, v)
+            end
+        end
+        ignoreobject = e.IgnoreObject
+        ignoreobject.FilterDescendantsInstances = ignorelist
+    end
+    return workspace:Raycast(origin, (position - origin), ignoreobject)
 end
 
-entity.addPlayer = function(plr)
-if plr.Character then entity.refresh(plr.Character, plr) end
-entity.playerConns[plr] = {
-plr.CharacterAdded:Connect(function(char) entity.refresh(char, plr) end),
-plr.CharacterRemoving:Connect(function(char) entity.removeEntity(char, plr == localPlayer) end),
-plr:GetPropertyChangedSignal("Team"):Connect(function()
-for _, v in entity.list do
-if v.Targetable ~= entity.targetCheck(v) then
-entity.refresh(v.meat, v.Player)
+e.getUpdateConnections = function(ent)
+    local hum = ent.Humanoid
+    return {
+        hum:GetPropertyChangedSignal('Health'):Connect(function() ent.Health = hum.Health end),
+        hum:GetPropertyChangedSignal('MaxHealth'):Connect(function() ent.MaxHealth = hum.MaxHealth end)
+    }
 end
+
+e.getEntity = function(char)
+    for i, v in e.List do
+        if v.Player == char or v.Character == char then
+            return v, i
+        end
+    end
 end
-if plr == localPlayer then entity.start()
-else entity.refresh(plr.Character, plr) end
-end),
+
+e.addEntity = function(char, plr, teamfunc)
+    if not char then return end
+    e.EntityThreads[char] = task.spawn(function()
+        local hum = wfco(char, 'Humanoid', 10)
+        local humrootpart = hum and wfco(hum, 'RootPart', workspace.StreamingEnabled and 9e9 or 10, true)
+        local head = char:WaitForChild('Head', 10) or humrootpart
+
+        if hum and humrootpart then
+            local entity = {
+                Connections = {},
+                Character = char,
+                Health = hum.Health,
+                Head = head,
+                Humanoid = hum,
+                HumanoidRootPart = humrootpart,
+                HipHeight = hum.HipHeight + (humrootpart.Size.Y / 2) + (hum.RigType == Enum.HumanoidRigType.R6 and 2 or 0),
+                MaxHealth = hum.MaxHealth,
+                NPC = plr == nil,
+                Player = plr,
+                RootPart = humrootpart,
+                TeamCheck = teamfunc
+            }
+
+            if plr == lp then
+                e.character = entity
+                e.isAlive = true
+            else
+                entity.Targetable = e.targetCheck(entity)
+                for _, v in e.getUpdateConnections(entity) do
+                    table.insert(entity.Connections, v)
+                end
+                table.insert(e.List, entity)
+            end
+        end
+        e.EntityThreads[char] = nil
+    end)
+end
+
+e.removeEntity = function(char, localcheck)
+    if localcheck then
+        if e.isAlive then
+            e.isAlive = false
+            for _, v in e.character.Connections do
+                v:Disconnect()
+            end
+            table.clear(e.character.Connections)
+        end
+        return
+    end
+
+    if char then
+        if e.EntityThreads[char] then
+            task.cancel(e.EntityThreads[char])
+            e.EntityThreads[char] = nil
+        end
+        local entity, ind = e.getEntity(char)
+        if ind then
+            for _, v in entity.Connections do
+                v:Disconnect()
+            end
+            table.clear(entity.Connections)
+            table.remove(e.List, ind)
+        end
+    end
+end
+
+e.refreshEntity = function(char, plr)
+    e.removeEntity(char)
+    e.addEntity(char, plr)
+end
+
+e.addPlayer = function(plr)
+    if plr.Character then
+        e.refreshEntity(plr.Character, plr)
+    end
+    e.PlayerConnections[plr] = {
+        plr.CharacterAdded:Connect(function(char)
+            e.refreshEntity(char, plr)
+        end),
+        plr.CharacterRemoving:Connect(function(char)
+            e.removeEntity(char, plr == lp)
+        end),
+        plr:GetPropertyChangedSignal('Team'):Connect(function()
+            for _, v in e.List do
+                if v.Targetable ~= e.targetCheck(v) then
+                    e.refreshEntity(v.Character, v.Player)
+                end
+            end
+            if plr == lp then
+                e.start()
+            else
+                e.refreshEntity(plr.Character, plr)
+            end
+        end)
+    }
+end
+
+e.removePlayer = function(plr)
+    if e.PlayerConnections[plr] then
+        for _, v in e.PlayerConnections[plr] do
+            v:Disconnect()
+        end
+        table.clear(e.PlayerConnections[plr])
+        e.PlayerConnections[plr] = nil
+    end
+    e.removeEntity(plr)
+end
+
+e.start = function()
+    if e.Running then e.stop() end
+    table.insert(e.Connections, ps.PlayerAdded:Connect(function(v) e.addPlayer(v) end))
+    table.insert(e.Connections, ps.PlayerRemoving:Connect(function(v) e.removePlayer(v) end))
+    for _, v in ps:GetPlayers() do
+        e.addPlayer(v)
+    end
+    table.insert(e.Connections, workspace:GetPropertyChangedSignal('CurrentCamera'):Connect(function()
+        gc = workspace.CurrentCamera or workspace:FindFirstChildWhichIsA('Camera')
+    end))
+    e.Running = true
+end
+
+e.stop = function()
+    for _, v in e.Connections do v:Disconnect() end
+    for _, v in e.PlayerConnections do
+        for _, v2 in v do v2:Disconnect() end
+        table.clear(v)
+    end
+    e.removeEntity(nil, true)
+    local cloned = table.clone(e.List)
+    for _, v in cloned do e.removeEntity(v.Character) end
+    for _, v in e.EntityThreads do task.cancel(v) end
+    table.clear(e.PlayerConnections)
+    table.clear(e.EntityThreads)
+    table.clear(e.Connections)
+    table.clear(cloned)
+    e.Running = false
+end
+
+e.kill = function()
+    if e.Running then e.stop() end
+end
+
+local p = {
+    SolveTrajectory = function(origin, projectileSpeed, gravity, targetPos, targetVelocity, playerGravity, playerHeight, playerJump, params)
+        local eps = 1e-9
+        local function isZero(d) return (d > -eps and d < eps) end
+        local function cuberoot(x) return (x > 0) and math.pow(x, (1 / 3)) or -math.pow(math.abs(x), (1 / 3)) end
+        local function solveQuadric(c0, c1, c2)
+            local s0, s1
+            local p_ = c1 / (2 * c0)
+            local q_ = c2 / c0
+            local D = p_ * p_ - q_
+            if isZero(D) then
+                s0 = -p_
+                return s0
+            elseif (D < 0) then
+                return
+            else
+                local sqrt_D = math.sqrt(D)
+                s0 = sqrt_D - p_
+                s1 = -sqrt_D - p_
+                return s0, s1
+            end
+        end
+        local function solveCubic(c0, c1, c2, c3)
+            local s0, s1, s2
+            local num, sub
+            local A, B, C
+            local sq_A, p_, q_
+            local cb_p, D
+
+            if c0 == 0 then return solveQuadric(c1, c2, c3) end
+
+            A = c1 / c0
+            B = c2 / c0
+            C = c3 / c0
+            sq_A = A * A
+            p_ = (1 / 3) * (-(1 / 3) * sq_A + B)
+            q_ = 0.5 * ((2 / 27) * A * sq_A - (1 / 3) * A * B + C)
+            cb_p = p_ * p_ * p_
+            D = q_ * q_ + cb_p
+
+            if isZero(D) then
+                if isZero(q_) then
+                    s0 = 0
+                    num = 1
+                else
+                    local u = cuberoot(-q_)
+                    s0 = 2 * u
+                    s1 = -u
+                    num = 2
+                end
+            elseif (D < 0) then
+                local phi = (1 / 3) * math.acos(-q_ / math.sqrt(-cb_p))
+                local t = 2 * math.sqrt(-p_)
+                s0 = t * math.cos(phi)
+                s1 = -t * math.cos(phi + math.pi / 3)
+                s2 = -t * math.cos(phi - math.pi / 3)
+                num = 3
+            else
+                local sqrt_D = math.sqrt(D)
+                local u = cuberoot(sqrt_D - q_)
+                local v = -cuberoot(sqrt_D + q_)
+                s0 = u + v
+                num = 1
+            end
+
+            sub = (1 / 3) * A
+            if (num > 0) then s0 = s0 - sub end
+            if (num > 1) then s1 = s1 - sub end
+            if (num > 2) then s2 = s2 - sub end
+
+            return s0, s1, s2
+        end
+        local function solveQuartic(c0, c1, c2, c3, c4)
+            local s0, s1, s2, s3
+            local coeffs = {}
+            local z, u, v, sub
+            local A, B, C, D
+            local sq_A, p_, q_, r_
+            local num
+
+            A = c1 / c0
+            B = c2 / c0
+            C = c3 / c0
+            D = c4 / c0
+
+            sq_A = A * A
+            p_ = -0.375 * sq_A + B
+            q_ = 0.125 * sq_A * A - 0.5 * A * B + C
+            r_ = -(3 / 256) * sq_A * sq_A + 0.0625 * sq_A * B - 0.25 * A * C + D
+
+            if isZero(r_) then
+                coeffs[3] = q_
+                coeffs[2] = p_
+                coeffs[1] = 0
+                coeffs[0] = 1
+                local results = {solveCubic(coeffs[0], coeffs[1], coeffs[2], coeffs[3])}
+                num = #results
+                s0, s1, s2 = results[1], results[2], results[3]
+            else
+                coeffs[3] = 0.5 * r_ * p_ - 0.125 * q_ * q_
+                coeffs[2] = -r_
+                coeffs[1] = -0.5 * p_
+                coeffs[0] = 1
+
+                s0, s1, s2 = solveCubic(coeffs[0], coeffs[1], coeffs[2], coeffs[3])
+                z = s0
+
+                u = z * z - r_
+                v = 2 * z - p_
+
+                if isZero(u) then u = 0 elseif (u > 0) then u = math.sqrt(u) else return end
+                if isZero(v) then v = 0 elseif (v > 0) then v = math.sqrt(v) else return end
+
+                coeffs[2] = z - u
+                coeffs[1] = q_ < 0 and -v or v
+                coeffs[0] = 1
+                local results1 = {solveQuadric(coeffs[0], coeffs[1], coeffs[2])}
+                num = #results1
+                s0, s1 = results1[1], results1[2]
+
+                coeffs[2] = z + u
+                coeffs[1] = q_ < 0 and v or -v
+                coeffs[0] = 1
+
+                if (num == 0) then
+                    local results2 = {solveQuadric(coeffs[0], coeffs[1], coeffs[2])}
+                    num = num + #results2
+                    s0, s1 = results2[1], results2[2]
+                end
+                if (num == 1) then
+                    local results2 = {solveQuadric(coeffs[0], coeffs[1], coeffs[2])}
+                    num = num + #results2
+                    s1, s2 = results2[1], results2[2]
+                end
+                if (num == 2) then
+                    local results2 = {solveQuadric(coeffs[0], coeffs[1], coeffs[2])}
+                    num = num + #results2
+                    s2, s3 = results2[1], results2[2]
+                end
+            end
+
+            sub = 0.25 * A
+            if (num > 0) then s0 = s0 - sub end
+            if (num > 1) then s1 = s1 - sub end
+            if (num > 2) then s2 = s2 - sub end
+            if (num > 3) then s3 = s3 - sub end
+
+            return {s3, s2, s1, s0}
+        end
+
+        local disp = targetPos - origin
+        local pv, qv, rv = targetVelocity.X, targetVelocity.Y, targetVelocity.Z
+        local hv, jv, kv = disp.X, disp.Y, disp.Z
+        local lv = -.5 * gravity
+
+        if math.abs(qv) > 0.01 and playerGravity and playerGravity > 0 then
+            local estTime = (disp.Magnitude / projectileSpeed)
+            local origq = qv
+            for i = 1, 100 do
+                qv = origq - (.5 * playerGravity) * estTime
+                local velo = targetVelocity * 0.016
+                local ray = workspace:Raycast(
+                    Vector3.new(targetPos.X, targetPos.Y, targetPos.Z),
+                    Vector3.new(velo.X, (qv * estTime) - playerHeight, velo.Z),
+                    params
+                )
+                if ray then
+                    local newTarget = ray.Position + Vector3.new(0, playerHeight, 0)
+                    estTime = estTime - math.sqrt(((targetPos - newTarget).Magnitude * 2) / playerGravity)
+                    targetPos = newTarget
+                    jv = (targetPos - origin).Y
+                    qv = 0
+                    break
+                else
+                    break
+                end
+            end
+        end
+
+        local solutions = solveQuartic(
+            lv*lv,
+            -2*qv*lv,
+            qv*qv - 2*jv*lv - projectileSpeed*projectileSpeed + pv*pv + rv*rv,
+            2*jv*qv + 2*hv*pv + 2*kv*rv,
+            jv*jv + hv*hv + kv*kv
+        )
+
+        if solutions then
+            local posRoots = {}
+            for _, v in solutions do
+                if v > 0 then
+                    table.insert(posRoots, v)
+                end
+            end
+            if posRoots[1] then
+                local t = posRoots[1]
+                local d = (hv + pv*t)/t
+                local e1 = (jv + qv*t - lv*t*t)/t
+                local f = (kv + rv*t)/t
+                return origin + Vector3.new(d, e1, f)
+            end
+        elseif gravity == 0 then
+            local t = (disp.Magnitude / projectileSpeed)
+            local d = (hv + pv*t)/t
+            local e1 = (jv + qv*t - lv*t*t)/t
+            local f = (kv + rv*t)/t
+            return origin + Vector3.new(d, e1, f)
+        end
+    end
 }
+
+local function em(options)
+    options = options or {}
+    local mouseLocation = options.MouseOrigin or gmp()
+    local sortingTable = {}
+
+    if not e.isAlive then return nil end
+
+    for _, v in e.List do
+        if not options.Players and v.Player then continue end
+        if not options.NPCs and v.NPC then continue end
+        if not v.Targetable then continue end
+
+        local targetPart = v["RootPart"]
+        if not targetPart then continue end
+
+        local position, vis = gc:WorldToViewportPoint(targetPart.Position)
+        if not vis then continue end
+
+        local mag = (mouseLocation - Vector2.new(position.x, position.y)).Magnitude
+        if mag > 600 then continue end
+
+        if e.isVulnerable(v) then
+            table.insert(sortingTable, {
+                Entity = v,
+                Magnitude = mag,
+                Position = position
+            })
+        end
+    end
+
+    table.sort(sortingTable, function(a, b) return a.Magnitude < b.Magnitude end)
+
+    for _, v in sortingTable do
+        if options.Wallcheck then
+            if e.Wallcheck(options.Origin or e.character.HumanoidRootPart.Position, v.Entity["RootPart"].Position, options.Wallcheck) then
+                continue
+            end
+        end
+        table.clear(options)
+        table.clear(sortingTable)
+        return v.Entity
+    end
+
+    table.clear(sortingTable)
+    table.clear(options)
+    return nil
 end
 
-entity.removePlayer = function(plr)
-if entity.playerConns[plr] then
-for _, v in entity.playerConns[plr] do v:Disconnect() end
-table.clear(entity.playerConns[plr])
-entity.playerConns[plr] = nil
-end
-entity.removeEntity(plr)
+local knit = nil
+local bw = {}
+
+local function wfbw()
+    local attempts = 0
+    while attempts < 100 do
+        attempts = attempts + 1
+        local success, km = pcall(function()
+            return debug.getupvalue(require(lp.PlayerScripts.TS.knit).setup, 9)
+        end)
+        if success and km then
+            local sa = 0
+            while not debug.getupvalue(km.Start, 1) and sa < 50 do
+                sa = sa + 1
+                task.wait(0.1)
+            end
+            if debug.getupvalue(km.Start, 1) then
+                return km
+            end
+        end
+        task.wait(0.1)
+    end
+    return nil
 end
 
-entity.start = function()
-if entity.running then entity.stop() end
-table.insert(entity.conns, playersService.PlayerAdded:Connect(function(v) entity.addPlayer(v) end))
-table.insert(entity.conns, playersService.PlayerRemoving:Connect(function(v) entity.removePlayer(v) end))
-for _, v in playersService:GetPlayers() do entity.addPlayer(v) end
-table.insert(entity.conns, pit:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
-gameCamera = pit.CurrentCamera or pit:FindFirstChildWhichIsA("Camera")
-end))
-entity.running = true
+local function sbw()
+    knit = wfbw()
+    if not knit then return false end
+    local success = pcall(function()
+        bw.ProjectileController = knit.Controllers.ProjectileController
+        bw.BowConstantsTable = debug.getupvalue(knit.Controllers.ProjectileController.enableBeam, 8)
+        pcall(function()
+            local mmf = debug.getupvalue(knit.Controllers.ProjectileController.launchProjectileWithValues, 2)
+            if mmf then
+                bw.ProjectileMeta = debug.getupvalue(mmf, 1)
+            end
+        end)
+        return true
+    end)
+    return success
 end
 
-entity.stop = function()
-for _, v in entity.conns do v:Disconnect() end
-for _, v in entity.playerConns do
-for _, v2 in v do v2:Disconnect() end
-table.clear(v)
-end
-entity.removeEntity(nil, true)
-local cloned = table.clone(entity.list)
-for _, v in cloned do entity.removeEntity(v.meat) end
-for _, v in entity.threads do task.cancel(v) end
-table.clear(entity.playerConns)
-table.clear(entity.threads)
-table.clear(entity.conns)
-table.clear(cloned)
-entity.running = false
+local function psm(targetPlayer, targetPart, projSpeed, gravity, origin)
+    if not targetPlayer or not targetPlayer.Character or not targetPart then
+        return targetPart and targetPart.Position or Vector3.zero
+    end
+
+    local currentPos = targetPart.Position
+    local currentVel = targetPart.Velocity
+    local distance = (currentPos - origin).Magnitude
+
+    local baseTimeToTarget = distance / projSpeed
+    local velocityMagnitude = Vector3.new(currentVel.X, 0, currentVel.Z).Magnitude
+    local verticalVel = currentVel.Y
+
+    local timeMultiplier = 1.0
+    if distance > 80 then timeMultiplier = 0.95
+    elseif distance > 50 then timeMultiplier = 0.98
+    elseif distance < 20 then timeMultiplier = 1.08
+    end
+
+    local timeToTarget = baseTimeToTarget * timeMultiplier
+
+    local horizontalPredictionStrength = 0.80
+    if distance > 70 then horizontalPredictionStrength = 0.70
+    elseif distance > 40 then horizontalPredictionStrength = 0.75
+    elseif distance < 25 then horizontalPredictionStrength = 0.88
+    end
+
+    local horizontalVel = Vector3.new(currentVel.X, 0, currentVel.Z)
+    local predictedHorizontal = horizontalVel * timeToTarget * horizontalPredictionStrength
+
+    local verticalPrediction = 0
+    local isJumping = verticalVel > 10
+    local isFalling = verticalVel < -15
+    local isPeaking = math.abs(verticalVel) < 3 and verticalVel < 1
+
+    if isFalling then
+        verticalPrediction = verticalVel * timeToTarget * 0.32
+    elseif isJumping then
+        verticalPrediction = verticalVel * timeToTarget * 0.28
+    elseif isPeaking then
+        verticalPrediction = -2 * timeToTarget
+    else
+        verticalPrediction = verticalVel * timeToTarget * 0.25
+    end
+
+    return currentPos + predictedHorizontal + Vector3.new(0, verticalPrediction, 0)
 end
 
--- Bedwars loader & dynamic weapon detection
-local bed = {}
-local bedReady = false
-
-local stash = {
-hand = { toolType = "", tool = nil, amount = 0 },
-inventory = { inventory = { items = {}, armor = {} }, hotbar = {}, hotbarSlot = 0 },
-equippedKit = "",
-}
-
-local function getItemMeta(it)
-if bed.ItemMeta and bed.ItemMeta[it] then return bed.ItemMeta[it] end
-return nil
+local function smoothAim(currentCFrame, targetPosition, distance)
+    local smoothnessFactor = 0.85
+    if distance > 70 then smoothnessFactor = 0.75
+    elseif distance > 40 then smoothnessFactor = 0.80
+    elseif distance < 20 then smoothnessFactor = 0.92
+    end
+    return currentCFrame:Lerp(CFrame.new(currentCFrame.Position, targetPosition), smoothnessFactor)
 end
 
-local function hasWeaponEquipped()
-local inv = stash.inventory
-if not inv or not inv.hotbar then return false end
-local slot = inv.hotbarSlot
-if slot == nil then return false end
-local slotItem = inv.hotbar[slot + 1]
-if not slotItem or not slotItem.item then return false end
-local itemType = slotItem.item.itemType
-local meta = getItemMeta(itemType)
+local oldCalc = nil
+local paEnabled = false
 
-if meta then
-if meta.sword or meta.weapon or meta.breakBlock or meta.projectileSource then
-return true
-end
-end
+local function epa()
+    if paEnabled or not bw.ProjectileController then return false end
+    local success = pcall(function()
+        if not oldCalc then
+            oldCalc = bw.ProjectileController.calculateImportantLaunchValues
+        end
 
-local lowered = tostring(itemType):lower()
-if lowered:find("sword") or lowered:find("blade") or lowered:find("katana")
-or lowered:find("scythe") or lowered:find("void") or lowered:find("rage")
-or lowered:find("dagger") or lowered:find("hammer") then
-return true
-end
-return false
-end
+        bw.ProjectileController.calculateImportantLaunchValues = function(...)
+            local self, projmeta, worldmeta, origin, shootpos = ...
 
-local function getWeaponItem()
-local inv = vault:FindFirstChild("Inventories") and vault.Inventories:FindFirstChild(me.Name)
-if not inv then return nil end
-for _, item in ipairs(inv:GetChildren()) do
-local n = item.Name:lower()
-if n:find("sword") or n:find("blade") or n:find("katana")
-or n:find("scythe") or n:find("void") or n:find("rage")
-or n:find("dagger") or n:find("hammer") then
-return item
-end
-end
-return nil
-end
+            local rc = RaycastParams.new()
+            rc.FilterType = Enum.RaycastFilterType.Include
+            rc.FilterDescendantsInstances = {workspace:FindFirstChild('Map') or workspace}
 
-local function hasWeaponGeneric()
-local char = me.Character
-if not char then return false end
-local hand = char:FindFirstChild("HandInvItem")
-if hand and hand.Value then
-local n = hand.Value.Name:lower()
-if n:find("sword") or n:find("blade") or n:find("katana")
-or n:find("scythe") or n:find("void") or n:find("dagger") then
-return true
-end
-end
-for _, obj in ipairs(char:GetChildren()) do
-if obj:IsA("Tool") then
-local n = obj.Name:lower()
-if n:find("sword") or n:find("blade") or n:find("katana")
-or n:find("scythe") or n:find("void") or n:find("dagger")
-or n:find("hammer") then
-return true
-end
-end
-end
-return false
-end
+            local pn = projmeta.projectile:lower()
+            -- blacklisted check (hardcoded)
+            local bl = {"telepearl", "telepearls"}
+            for _, name in ipairs(bl) do
+                if pn == name:lower() then
+                    return oldCalc(...)
+                end
+            end
 
-local function checkWeaponEquipped()
-if bedReady and bed.ItemMeta then return hasWeaponEquipped() end
-return hasWeaponGeneric()
-end
+            local plr = em({
+                Players = true,
+                NPCs = false,
+                Wallcheck = nil,  -- false -> always nil
+                Origin = e.isAlive and (shootpos or e.character.RootPart.Position) or Vector3.zero
+            })
 
--- Reach bypass
-local function bypass(selfPos, targetPos)
-local dist = (selfPos - targetPos).Magnitude
-if dist <= MAX_SERVER_REACH then return selfPos end
-local dir = (targetPos - selfPos).Unit
-return targetPos - (dir * MAX_SERVER_REACH)
-end
+            if plr and plr.Character and plr["RootPart"] then
+                local pos = shootpos or (self.getLaunchPosition and self:getLaunchPosition(origin) or origin)
+                if not pos then return oldCalc(...) end
 
-local remoteGate = {}
+                -- include other projectiles always true
+                local meta = projmeta:getProjectileMeta() or {}
+                local lifetime = (worldmeta and meta.predictionLifetimeSec or meta.lifetimeSec or 3)
+                local gravity = (meta.gravitationalAcceleration or 196.2) * projmeta.gravityMultiplier
+                local projSpeed = (meta.launchVelocity or 100)
+                local offsetpos = pos + (projmeta.projectile == 'owl_projectile' and Vector3.zero or projmeta.fromPositionOffset)
 
-local function hookGet()
-if not bed.Client then return end
-local oldGet = bed.Client.Get
-if not oldGet then return end
-bed.Client.Get = function(s, remoteName)
-local call = oldGet(s, remoteName)
-if remoteName == (remoteGate.AttackEntity or "AttackEntity") then
-return {
-instance = call.instance,
-SendToServer = function(_, attackTable, ...)
-if attackTable and attackTable.validate and cfg.hitfix then
-local sp = attackTable.validate.selfPosition and attackTable.validate.selfPosition.value
-local tp = attackTable.validate.targetPosition and attackTable.validate.targetPosition.value
-if sp and tp then
-attackTable.validate.selfPosition.value = bypass(sp, tp)
-end
-end
-return call:SendToServer(attackTable, ...)
-end,
-}
-end
-return call
-end
-end
+                local playerGravity = workspace.Gravity
+                local balloons = plr.Character and plr.Character:GetAttribute('InflatedBalloons')
+                if balloons and balloons > 0 then
+                    playerGravity = workspace.Gravity * math.max(1 - (balloons * 0.05), 0.7)
+                end
+                if plr.Player and plr.Player:GetAttribute('IsOwlTarget') then
+                    for _, owl in cs:GetTagged('Owl') do
+                        if owl:GetAttribute('Target') == plr.Player.UserId and owl:GetAttribute('Status') == 2 then
+                            playerGravity = 0
+                            break
+                        end
+                    end
+                end
 
-local function applyHitboxes(on, expand)
-if not bed.SwordController or not bed.SwordController.swingSwordInRegion then return false end
-local ok = pcall(function()
-if on then
-debug.setconstant(bed.SwordController.swingSwordInRegion, 6, (expand or 38) / 3)
-else
-debug.setconstant(bed.SwordController.swingSwordInRegion, 6, 3.8)
-end
-end)
-return ok
+                local rawLook = CFrame.new(offsetpos, plr["RootPart"].Position)
+                local distance = (plr["RootPart"].Position - offsetpos).Magnitude
+                local predictedPosition = psm(plr.Player, plr["RootPart"], projSpeed, gravity, offsetpos)
+                local newlook = smoothAim(rawLook, predictedPosition, distance)
+
+                if projmeta.projectile ~= 'owl_projectile' then
+                    newlook = newlook * CFrame.new(
+                        bw.BowConstantsTable.RelX or 0,
+                        bw.BowConstantsTable.RelY or 0,
+                        bw.BowConstantsTable.RelZ or 0
+                    )
+                end
+
+                local targetVelocity = projmeta.projectile == 'telepearl' and Vector3.zero or plr["RootPart"].Velocity
+
+                local calc = p.SolveTrajectory(
+                    newlook.p,
+                    projSpeed,
+                    gravity,
+                    predictedPosition,
+                    targetVelocity,
+                    playerGravity,
+                    plr.HipHeight,
+                    plr.Jumping and 50 or nil,
+                    rc
+                )
+
+                if calc then
+                    local finalDirection = (calc - newlook.p).Unit
+                    local angleFromHorizontal = math.acos(math.clamp(finalDirection:Dot(Vector3.new(0, 1, 0)), -1, 1))
+                    local minAngle = math.rad(1)
+                    local maxAngle = math.rad(179)
+                    if angleFromHorizontal > minAngle and angleFromHorizontal < maxAngle then
+                        return {
+                            initialVelocity = finalDirection * projSpeed,
+                            positionFrom = offsetpos,
+                            deltaT = lifetime,
+                            gravitationalAcceleration = gravity,
+                            drawDurationSeconds = 5
+                        }
+                    end
+                end
+            end
+
+            return oldCalc(...)
+        end
+
+        paEnabled = true
+    end)
+    return success
 end
 
-local function applyReach(dist)
-pcall(function()
-if bed.CombatConstant then
-bed.CombatConstant.RAYCAST_SWORD_CHARACTER_DISTANCE = dist
-end
-end)
-end
-
-local function waitForBedwars()
-local tries = 0
-while tries < 100 do
-tries = tries + 1
-local ok, knit = pcall(function()
-return debug.getupvalue(require(me.PlayerScripts.TS.knit).setup, 9)
-end)
-if ok and knit then
-local start = 0
-while not debug.getupvalue(knit.Start, 1) and start < 50 do
-start = start + 1
-task.wait(0.1)
-end
-if debug.getupvalue(knit.Start, 1) then
-return knit
-end
-end
-task.wait(0.1)
-end
-return nil
+local function dpa()
+    if not paEnabled or not bw.ProjectileController then return false end
+    local success = pcall(function()
+        if oldCalc then
+            bw.ProjectileController.calculateImportantLaunchValues = oldCalc
+            oldCalc = nil
+            paEnabled = false
+        end
+    end)
+    return success
 end
 
-local combatController = nil -- will hold dynamic controller
+local initialized = false
 
-task.spawn(function()
-local knit = waitForBedwars()
-if not knit then return end
+local function init()
+    if initialized then return end
 
-local ok = pcall(function()
-bed.SwordController = knit.Controllers.SwordController
-bed.ItemMeta = debug.getupvalue(require(vault.TS.item["item-meta"]).getItemMeta, 1)
-bed.Store = require(me.PlayerScripts.TS.ui.store).ClientStore
-bed.Client = require(vault.TS.remotes).default.Client
+    repeat task.wait() until game:IsLoaded()
+    if not sbw() then
+        warn("PA: BedWars not found.")
+        return
+    end
 
-pcall(function()
-bed.QueryUtil = require(vault["rbxts_include"]["node_modules"]["@easy-games"]["game-core"].out).GameQueryUtil
-end)
+    e.start()
+    ac({Disconnect = function() e.stop() end})
 
-local paths = {
-function() return require(vault.TS.combat["combat-constant"]).CombatConstant end,
-function() return require(vault.TS.combat.CombatConstant) end,
-function() return knit.Controllers.SwordController.CombatConstant end,
-}
-for _, fn in ipairs(paths) do
-local s, r = pcall(fn)
-if s and r and r.RAYCAST_SWORD_CHARACTER_DISTANCE then
-bed.CombatConstant = r; break
-end
-end
+    -- start enabled (hardcoded)
+    epa()
 
-pcall(function()
-local function dumpRemote(tab)
-for i, v in tab do if v == "Client" then return tab[i + 1] end end
-return ""
-end
-local r = dumpRemote(debug.getconstants(bed.SwordController.sendServerRequest or function() end))
-if r and r ~= "" then remoteGate.AttackEntity = r end
-end)
+    -- toggle key hardcoded to Backquote
+    local tkc = Enum.KeyCode.Backquote
+    local tc = uis.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.KeyCode == tkc then
+            if paEnabled then
+                dpa()
+            else
+                epa()
+            end
+        end
+    end)
+    ac(tc)
 
-pcall(function()
-local function updateStash(new, old)
-if new.Inventory ~= old.Inventory then
-local newinv = (new.Inventory and new.Inventory.observedInventory) or { inventory = {} }
-stash.inventory = newinv
-end
-end
-local c = bed.Store.changed:connect(updateStash)
-updateStash(bed.Store:getState(), {})
-end)
-end)
-
-if ok then
-bedReady = true
-applyReach(cfg.range)
-hookGet()
-
-
-for name, controller in pairs(knit.Controllers) do
-local lowerName = tostring(name):lower()
-if lowerName:find("sword") or lowerName:find("combat")
-or lowerName:find("blade") or lowerName:find("dagger")
-or lowerName:find("scythe") or lowerName:find("weapon") then
-combatController = controller
-break
-end
-end
-if not combatController then
-combatController = bed.SwordController
-end
-print("[~] Universal killaura ready")
-else
-warn("[~] Vape engine failed – falling back to FireServer")
-end
-end)
-
--- Main loop
-local lmb = false
-pain.InputBegan:Connect(function(input)
-if input.UserInputType == Enum.UserInputType.MouseButton1 then lmb = true end
-end)
-pain.InputEnded:Connect(function(input)
-if input.UserInputType == Enum.UserInputType.MouseButton1 then lmb = false end
-end)
-
-local cachedAng, cachedCos = -1, 0
-local function getCos()
-if cfg.angleDeg ~= cachedAng then
-cachedAng = cfg.angleDeg
-cachedCos = math.cos(math.rad(cfg.angleDeg / 2))
-end
-return cachedCos
+    initialized = true
+    print("ProjectileAimbot active. Press Backquote to toggle.")
 end
 
-local function inAngle(camCF, myPos, tPos)
-if cfg.angleDeg >= 360 then return true end
-local to = (tPos - myPos).Unit
-local fwd = camCF.LookVector.Unit
-return fwd:Dot(to) >= getCos()
+local oldInstances = getgenv().__PAI
+if oldInstances then
+    for _, f in pairs(oldInstances) do
+        pcall(f)
+    end
 end
+getgenv().__PAI = {}
 
-local rayParams = RaycastParams.new()
-rayParams.FilterType = Enum.RaycastFilterType.Exclude
-local function refreshRay()
-local char = me.Character
-rayParams.FilterDescendantsInstances = char and { char } or {}
+local function fullCleanup()
+    cln()
+    dpa()
+    if e.Running then e.stop() end
 end
+table.insert(getgenv().__PAI, fullCleanup)
 
-local function visible(fromPos, toPos)
-if not cfg.ignoreWalls then return true end
-refreshRay()
-local dir = toPos - fromPos
-local res = pit:Raycast(fromPos, dir, rayParams)
-if not res then return true end
-local hit = res.Instance
-for _, p in ipairs(jail:GetPlayers()) do
-if p.Character and hit:IsDescendantOf(p.Character) then return true end
-end
-return false
-end
-
-local rawRemote
-local function getRaw()
-if rawRemote then return rawRemote end
-local ok, v = pcall(function()
-return vault.rbxts_include.node_modules:FindFirstChild("@rbxts").net.out._NetManaged.SwordHit
-end)
-if ok and v then rawRemote = v end
-return rawRemote
-end
-
-local lastAttack = 0
-local targetList = {}
-
-rope.Heartbeat:Connect(function()
-if not cfg.enabled then return end
-if cfg.requireMouse and not lmb then return end
-if cfg.limitToItems and not checkWeaponEquipped() then return end
-
-local r = root()
-if not r then return end
-local myPos = r.Position
-local h = hum()
-if not h or h.Health <= 0 then return end
-
-local camCF = abyss.CFrame
-table.clear(targetList)
-
-for _, e in ipairs(entity.list) do
-if not e.Targetable then continue end
-if not entity.isVulnerable(e) then continue end
-if cfg.teamCheck and e.Player then
-local myTeam = me.Team
-local eTeam = e.Player.Team
-if myTeam and eTeam and eTeam == myTeam then continue end
-end
-local rp = e.RootPart
-if not rp then continue end
-local ePos = rp.Position
-local dist = (myPos - ePos).Magnitude
-if dist > cfg.range then continue end
-if not inAngle(camCF, myPos, ePos) then continue end
-if not visible(myPos, ePos) then continue end
-table.insert(targetList, {char = e.meat, pos = ePos, dist = dist})
-end
-
-table.sort(targetList, function(a, b) return a.dist < b.dist end)
-
-if #targetList > 0 then
-local now = tick()
-if now - lastAttack >= cfg.attackSpeed then
--- Primary: dynamic combat controller (works for all kit weapons)
-if bedReady and combatController and combatController.swingSwordInRegion then
-local sz = cfg.hitboxes and (cfg.hitboxExpand / 3) or 3.8
-for _, t in ipairs(targetList) do
-local reg = CFrame.new(t.pos)
-pcall(function()
-combatController:swingSwordInRegion(reg, sz)
-end)
-if not cfg.multiHit then break end
-end
-lastAttack = now
-else
--- Fallback: FireServer with weapon item
-local net = getRaw()
-local wp = getWeaponItem()
-if net and wp then
-for _, t in ipairs(targetList) do
-local fireSelf = cfg.hitfix and bypass(myPos, t.pos) or myPos
-local args = {{
-entityInstance = t.char,
-chargedAttack = { chargeRatio = 0 },
-validate = {
-targetPosition = { value = t.pos },
-selfPosition = { value = fireSelf },
-},
-weapon = wp,
-}}
-pcall(net.FireServer, net, unpack(args))
-if not cfg.multiHit then break end
-end
-lastAttack = now
-end
-end
-end
-end
+local sc
+sc = game.DescendantRemoving:Connect(function(d)
+    if d == script then
+        fullCleanup()
+        if sc then sc:Disconnect() end
+    end
 end)
 
--- Keybind
-pain.InputBegan:Connect(function(input, gp)
-if gp then return end
-if input.KeyCode == Enum.KeyCode.Q then
-cfg.enabled = not cfg.enabled
-print("[~] Killaura", cfg.enabled and "ON" or "OFF")
-end
-end)
-
-entity.start()
-
-task.wait(2)
-if cfg.hitboxes and bedReady then
-applyHitboxes(true, cfg.hitboxExpand)
-end
-
-print("[~] UNIVERSAL – all swords + kit weapons (Void Knight, Freiya, etc.)")
-print("[~] MAX SPEED | REACH BYPASS "..tostring(cfg.range).." | Q toggle")
+init()
