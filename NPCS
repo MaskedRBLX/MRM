@@ -11,6 +11,7 @@ local me    = jail.LocalPlayer
 local mouse = me:GetMouse()
 local abyss = pit.CurrentCamera
 
+
 local function reveal(raw)
     local s = 1000
     return {
@@ -30,15 +31,18 @@ local function reveal(raw)
 end
 
 local cfg = reveal({
-    1,       
-    1016,    
-    1184,    
-    0,      
-    0,       
-    1,      
-    1,       
-    1080,   
-    1000,    
+    1,       -- enabled
+    1040,    -- range (40+1000)
+    1,       -- teamCheck
+    1190,    -- angleDeg (190+1000)
+    0,       -- requireMouse
+    1,       -- limitToItems
+    1,       -- ignoreWalls
+    0,       -- multiHit
+    1,       -- hitfix
+    1,       -- hitboxes
+    1080,    -- hitboxExpand (80+1000)
+    1000,    -- attackSpeed (0+1000)
 })
 
 local MAX_SERVER_REACH = 7.9
@@ -548,7 +552,7 @@ local function visible(fromPos, toPos)
     local res = pit:Raycast(fromPos, unitDir * dist, wallParams)
     return res == nil
 end
-
+-- =============================================================
 
 local rawRemote
 local function getRaw()
@@ -647,8 +651,9 @@ if cfg.hitboxes and bedReady then
     applyHitboxes(true, cfg.hitboxExpand)
 end
 
-
-
+-- ============================================================
+-- PROFILE: 37 HIT MASKED - UI with full profile save/load
+-- ============================================================
 local _37 = "37 HIT MASKED"
 local _x = {}
 local _y = Instance.new("ScreenGui")
@@ -880,6 +885,7 @@ local function loadProfile()
     if data.kaToggleKey then kaToggleKey = Enum.KeyCode[data.kaToggleKey] or Enum.KeyCode.Q end
     if data.uiToggleKey then uiToggleKey = Enum.KeyCode[data.uiToggleKey] or Enum.KeyCode.RightControl end
 
+    -- Reapply live modules if loaded
     if bedReady then
         applyReach(cfg.range)
         applyHitboxes(cfg.hitboxes, cfg.hitboxExpand)
@@ -897,7 +903,7 @@ local function triggerAutoSave()
     end)
 end
 
-
+-- Config change handler with auto-save
 local function _cfg(key, val)
     if key == "range" then
         cfg.range = val
@@ -917,7 +923,7 @@ local function _cfg(key, val)
     triggerAutoSave()
 end
 
-
+-- Dynamic keybinds
 local kaToggleKey = Enum.KeyCode.Q
 local uiToggleKey = Enum.KeyCode.RightControl
 local kaToggleConn
@@ -945,7 +951,7 @@ local function startUiToggle()
     end)
 end
 
-
+-- Build UI elements with registration keys
 _addCheck(_f, "Enabled", cfg.enabled, function(v) _cfg("enabled", v) end, "enabled")
 _addCheck(_f, "Team Check", cfg.teamCheck, function(v) _cfg("teamCheck", v) end, "teamCheck")
 _addCheck(_f, "Require Mouse", cfg.requireMouse, function(v) _cfg("requireMouse", v) end, "requireMouse")
@@ -968,7 +974,7 @@ _addKeybind(_f, "Toggle UI", uiToggleKey, function(k)
     triggerAutoSave()
 end, "uiToggleKey")
 
-
+-- Add manual Save button
 local saveBtn = Instance.new("TextButton")
 saveBtn.Size = UDim2.new(1, -10, 0, 25)
 saveBtn.Position = UDim2.new(0, 5, 0, _offset + 5)
