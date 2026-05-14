@@ -5,11 +5,11 @@ local rope = game:GetService("RunService")
 local pain = game:GetService("UserInputService")
 local vault = game:GetService("ReplicatedStorage")
 local pit  = game:GetService("Workspace")
+local http = game:GetService("HttpService")
 
 local me    = jail.LocalPlayer
 local mouse = me:GetMouse()
 local abyss = pit.CurrentCamera
-
 
 local function reveal(raw)
     local s = 1000
@@ -31,17 +31,14 @@ end
 
 local cfg = reveal({
     1,       
-    1016,   
-    1,      
-    1185,   
+    1016,    
+    1184,    
+    0,      
     0,       
-    1,       
     1,      
-    0,    
-    1,    
-    1,     
+    1,       
     1080,   
-    1000,  
+    1000,    
 })
 
 local MAX_SERVER_REACH = 7.9
@@ -49,7 +46,7 @@ local MAX_SERVER_REACH = 7.9
 local function root() return me.Character and me.Character:FindFirstChild("HumanoidRootPart") end
 local function hum()  return me.Character and me.Character:FindFirstChild("Humanoid") end
 
-
+-- Entity lib
 local cloneref = cloneref or function(o) return o end
 local playersService = cloneref(jail)
 local localPlayer    = playersService.LocalPlayer
@@ -149,20 +146,6 @@ entity.addEntity = function(char, plr, teamFn)
         local head = char:WaitForChild("Head", 10) or rp
 
         if h and rp then
-            -- Collect all possible body parts that can be hit
-            local parts = { head, rp }
-            local torso = char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
-            if torso then table.insert(parts, torso) end
-            for _, limbName in ipairs({
-                "LeftArm","RightArm","LeftLeg","RightLeg",
-                "LeftUpperArm","RightUpperArm","LeftLowerArm","RightLowerArm",
-                "LeftUpperLeg","RightUpperLeg","LeftLowerLeg","RightLowerLeg",
-                "LeftHand","RightHand","LeftFoot","RightFoot"
-            }) do
-                local limb = char:FindFirstChild(limbName)
-                if limb then table.insert(parts, limb) end
-            end
-
             local e = {
                 _conns          = {},
                 meat            = char,
@@ -176,7 +159,6 @@ entity.addEntity = function(char, plr, teamFn)
                 Player          = plr,
                 RootPart        = rp,
                 TeamCheck       = teamFn,
-                Parts           = parts,   -- NEW: all targetable parts
             }
 
             if plr == localPlayer then
@@ -541,7 +523,7 @@ local function inAngle(camCF, myPos, tPos)
     return fwd:Dot(to) >= getCos()
 end
 
-
+-- ========== STRICT WALL CHECK (IGNORES ALL PLAYERS) ==========
 local wallParams = RaycastParams.new()
 wallParams.FilterType = Enum.RaycastFilterType.Exclude
 wallParams.FilterDescendantsInstances = {}
@@ -595,7 +577,7 @@ rope.Heartbeat:Connect(function()
     local camCF = abyss.CFrame
     table.clear(targetList)
 
-    -- MODIFIED: target the closest body part of each enemy
+    -- TARGET ONLY ROOT PART (HumanoidRootPart)
     for _, e in ipairs(entity.list) do
         if not e.Targetable then continue end
         if not entity.isVulnerable(e) then continue end
@@ -605,30 +587,17 @@ rope.Heartbeat:Connect(function()
             if myTeam and eTeam and eTeam == myTeam then continue end
         end
 
-        local closestPart = nil
-        local closestDist = math.huge
-        if e.Parts then
-            for _, part in ipairs(e.Parts) do
-                if part and part.Parent then
-                    local partPos = part.Position
-                    local d = (myPos - partPos).Magnitude
-                    if d < closestDist then
-                        closestDist = d
-                        closestPart = part
-                    end
-                end
-            end
-        end
-        if not closestPart then continue end
+        local targetPart = e.HumanoidRootPart
+        if not targetPart then continue end
 
-        local ePos = closestPart.Position
-        local dist = closestDist
+        local ePos = targetPart.Position
+        local dist = (myPos - ePos).Magnitude
 
         if dist > cfg.range then continue end
         if not inAngle(camCF, myPos, ePos) then continue end
         if not visible(myPos, ePos) then continue end
 
-        table.insert(targetList, {char = e.meat, pos = ePos, dist = dist, part = closestPart})
+        table.insert(targetList, {char = e.meat, pos = ePos, dist = dist, part = targetPart})
     end
 
     table.sort(targetList, function(a, b) return a.dist < b.dist end)
@@ -671,15 +640,6 @@ rope.Heartbeat:Connect(function()
     end
 end)
 
-
-pain.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if input.KeyCode == Enum.KeyCode.Q then
-        cfg.enabled = not cfg.enabled
-        print("[~] Killaura", cfg.enabled and "ON" or "OFF")
-    end
-end)
-
 entity.start()
 
 task.wait(2)
@@ -687,5 +647,362 @@ if cfg.hitboxes and bedReady then
     applyHitboxes(true, cfg.hitboxExpand)
 end
 
-print("[~] UNIVERSAL – all swords + kit weapons (multi‑part targeting)")
-print("[~] MAX SPEED | REACH BYPASS "..tostring(cfg.range).." | Q toggle")
+
+
+local _37 = "37 HIT MASKED"
+local _x = {}
+local _y = Instance.new("ScreenGui")
+_y.Name = _37
+_y.ResetOnSpawn = false
+_y.Parent = game:GetService("CoreGui") or me:WaitForChild("PlayerGui")
+
+local _f = Instance.new("Frame")
+_f.Size = UDim2.new(0, 260, 0, 480) -- increased height for save button
+_f.Position = UDim2.new(0.5, -130, 0.5, -240)
+_f.BackgroundColor3 = Color3.fromRGB(15,15,15)
+_f.BorderSizePixel = 0
+_f.Active = true
+_f.Draggable = true
+_f.Parent = _y
+
+local _title = Instance.new("TextLabel")
+_title.Size = UDim2.new(1,0,0,30)
+_title.BackgroundColor3 = Color3.fromRGB(25,25,25)
+_title.Text = _37
+_title.TextColor3 = Color3.fromRGB(255,255,255)
+_title.Font = Enum.Font.Code
+_title.TextSize = 14
+_title.Parent = _f
+
+-- Store references to all UI controls for later updates
+local uiControls = {}  -- { {ctrl, key, type}, ... }
+
+local _offset = 35
+local function _addCheck(parent, text, default, callback, key)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1,-10,0,25)
+    frame.Position = UDim2.new(0,5,0,_offset)
+    frame.BackgroundTransparency = 1
+    frame.Parent = parent
+    _offset = _offset + 28
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0,40,0,20)
+    btn.Position = UDim2.new(1,-45,0.5,-10)
+    btn.Text = ""
+    btn.BackgroundColor3 = default and Color3.fromRGB(0,200,0) or Color3.fromRGB(200,0,0)
+    btn.Parent = frame
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1,-55,1,0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = text
+    lbl.TextColor3 = Color3.fromRGB(255,255,255)
+    lbl.Font = Enum.Font.Code
+    lbl.TextSize = 12
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = frame
+
+    local state = default
+    btn.MouseButton1Click:Connect(function()
+        state = not state
+        btn.BackgroundColor3 = state and Color3.fromRGB(0,200,0) or Color3.fromRGB(200,0,0)
+        callback(state)
+    end)
+    local ctrl = {Set = function(v) state = v; btn.BackgroundColor3 = state and Color3.fromRGB(0,200,0) or Color3.fromRGB(200,0,0) end}
+    table.insert(uiControls, {ctrl = ctrl, key = key, type = "check"})
+    return ctrl
+end
+
+local function _addSlider(parent, text, min, max, default, callback, key)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1,-10,0,40)
+    frame.Position = UDim2.new(0,5,0,_offset)
+    frame.BackgroundTransparency = 1
+    frame.Parent = parent
+    _offset = _offset + 45
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1,0,0,20)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = text .. ": " .. tostring(default)
+    lbl.TextColor3 = Color3.fromRGB(255,255,255)
+    lbl.Font = Enum.Font.Code
+    lbl.TextSize = 12
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = frame
+
+    local bar = Instance.new("Frame")
+    bar.Size = UDim2.new(1,-10,0,8)
+    bar.Position = UDim2.new(0,5,0,25)
+    bar.BackgroundColor3 = Color3.fromRGB(60,60,60)
+    bar.BorderSizePixel = 0
+    bar.Parent = frame
+
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new((default-min)/(max-min),0,1,0)
+    fill.BackgroundColor3 = Color3.fromRGB(0,150,255)
+    fill.BorderSizePixel = 0
+    fill.Parent = bar
+
+    local knob = Instance.new("TextButton")
+    knob.Size = UDim2.new(0,16,0,16)
+    knob.Position = UDim2.new((default-min)/(max-min),-8,0.5,-8)
+    knob.BackgroundColor3 = Color3.fromRGB(255,255,255)
+    knob.BorderSizePixel = 0
+    knob.Text = ""
+    knob.Parent = bar
+
+    local dragging = false
+    local function updateKnob(x)
+        local rel = math.clamp((x - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
+        knob.Position = UDim2.new(rel, -8, 0.5, -8)
+        fill.Size = UDim2.new(rel, 0, 1, 0)
+        local val = math.floor(min + (max-min)*rel + 0.5)
+        lbl.Text = text .. ": " .. tostring(val)
+        callback(val)
+        return val
+    end
+
+    knob.MouseButton1Down:Connect(function()
+        dragging = true
+    end)
+    pain.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    pain.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            updateKnob(input.Position.X)
+        end
+    end)
+    updateKnob(knob.AbsolutePosition.X + knob.AbsoluteSize.X/2)
+    local ctrl = {Set = function(v) updateKnob(bar.AbsolutePosition.X + (v-min)/(max-min)*bar.AbsoluteSize.X) end}
+    table.insert(uiControls, {ctrl = ctrl, key = key, type = "slider"})
+    return ctrl
+end
+
+local function _addKeybind(parent, text, default, callback, key)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1,-10,0,30)
+    frame.Position = UDim2.new(0,5,0,_offset)
+    frame.BackgroundTransparency = 1
+    frame.Parent = parent
+    _offset = _offset + 33
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(0.5,0,1,0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = text
+    lbl.TextColor3 = Color3.fromRGB(255,255,255)
+    lbl.Font = Enum.Font.Code
+    lbl.TextSize = 12
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = frame
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0,80,0,22)
+    btn.Position = UDim2.new(1,-85,0.5,-11)
+    btn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    btn.Text = default.Name
+    btn.TextColor3 = Color3.fromRGB(255,255,255)
+    btn.Font = Enum.Font.Code
+    btn.TextSize = 12
+    btn.Parent = frame
+
+    local listening = false
+    btn.MouseButton1Click:Connect(function()
+        if listening then return end
+        listening = true
+        btn.Text = "..."
+        local conn; conn = pain.InputBegan:Connect(function(input, gp)
+            if gp or input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+            if listening then
+                listening = false
+                conn:Disconnect()
+                local key = input.KeyCode
+                btn.Text = key.Name
+                callback(key)
+            end
+        end)
+    end)
+    local ctrl = {Set = function(k) btn.Text = k.Name; callback(k) end}
+    table.insert(uiControls, {ctrl = ctrl, key = key, type = "keybind"})
+    return ctrl
+end
+
+-- Save/Load profile via file (exploit environment)
+local profilePath = "37HITMASKED_config.json"
+local autoSaveScheduled = false
+
+local function saveProfile()
+    local data = {
+        enabled = cfg.enabled,
+        range = cfg.range,
+        teamCheck = cfg.teamCheck,
+        angleDeg = cfg.angleDeg,
+        requireMouse = cfg.requireMouse,
+        limitToItems = cfg.limitToItems,
+        ignoreWalls = cfg.ignoreWalls,
+        multiHit = cfg.multiHit,
+        hitfix = cfg.hitfix,
+        hitboxes = cfg.hitboxes,
+        hitboxExpand = cfg.hitboxExpand,
+        attackSpeed = cfg.attackSpeed,
+        kaToggleKey = kaToggleKey.Name,
+        uiToggleKey = uiToggleKey.Name,
+    }
+    local json = http:JSONEncode(data)
+    if writefile then
+        pcall(function() writefile(profilePath, json) end)
+    end
+end
+
+local function loadProfile()
+    if not isfile or not readfile or not isfile(profilePath) then return false end
+    local json = readfile(profilePath)
+    local data = http:JSONDecode(json)
+    if not data then return false end
+
+    if data.range ~= nil then cfg.range = math.clamp(data.range, 1, 40) end
+    if data.enabled ~= nil then cfg.enabled = data.enabled end
+    if data.teamCheck ~= nil then cfg.teamCheck = data.teamCheck end
+    if data.angleDeg ~= nil then cfg.angleDeg = math.clamp(data.angleDeg, 0, 360) end
+    if data.requireMouse ~= nil then cfg.requireMouse = data.requireMouse end
+    if data.limitToItems ~= nil then cfg.limitToItems = data.limitToItems end
+    if data.ignoreWalls ~= nil then cfg.ignoreWalls = data.ignoreWalls end
+    if data.multiHit ~= nil then cfg.multiHit = data.multiHit end
+    if data.hitfix ~= nil then cfg.hitfix = data.hitfix end
+    if data.hitboxes ~= nil then cfg.hitboxes = data.hitboxes end
+    if data.hitboxExpand ~= nil then cfg.hitboxExpand = math.clamp(data.hitboxExpand, 0, 200) end
+    if data.attackSpeed ~= nil then cfg.attackSpeed = data.attackSpeed end
+    if data.kaToggleKey then kaToggleKey = Enum.KeyCode[data.kaToggleKey] or Enum.KeyCode.Q end
+    if data.uiToggleKey then uiToggleKey = Enum.KeyCode[data.uiToggleKey] or Enum.KeyCode.RightControl end
+
+    if bedReady then
+        applyReach(cfg.range)
+        applyHitboxes(cfg.hitboxes, cfg.hitboxExpand)
+    end
+    cachedAng = -1  -- force angle recalc
+    return true
+end
+
+local function triggerAutoSave()
+    if autoSaveScheduled then return end
+    autoSaveScheduled = true
+    task.delay(1, function()
+        autoSaveScheduled = false
+        saveProfile()
+    end)
+end
+
+
+local function _cfg(key, val)
+    if key == "range" then
+        cfg.range = val
+        if bedReady then applyReach(val) end
+    elseif key == "angleDeg" then
+        cfg.angleDeg = val
+        cachedAng = -1
+    elseif key == "hitboxExpand" then
+        cfg.hitboxExpand = val
+        if bedReady and cfg.hitboxes then applyHitboxes(true, val) end
+    elseif key == "hitboxes" then
+        cfg.hitboxes = val
+        if bedReady then applyHitboxes(val, cfg.hitboxExpand) end
+    else
+        cfg[key] = val
+    end
+    triggerAutoSave()
+end
+
+
+local kaToggleKey = Enum.KeyCode.Q
+local uiToggleKey = Enum.KeyCode.RightControl
+local kaToggleConn
+local uiToggleConn
+
+local function startKaToggle()
+    if kaToggleConn then kaToggleConn:Disconnect() end
+    kaToggleConn = pain.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.KeyCode == kaToggleKey then
+            cfg.enabled = not cfg.enabled
+            print("[~] Killaura", cfg.enabled and "ON" or "OFF")
+            triggerAutoSave()
+        end
+    end)
+end
+
+local function startUiToggle()
+    if uiToggleConn then uiToggleConn:Disconnect() end
+    uiToggleConn = pain.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.KeyCode == uiToggleKey then
+            _y.Enabled = not _y.Enabled
+        end
+    end)
+end
+
+
+_addCheck(_f, "Enabled", cfg.enabled, function(v) _cfg("enabled", v) end, "enabled")
+_addCheck(_f, "Team Check", cfg.teamCheck, function(v) _cfg("teamCheck", v) end, "teamCheck")
+_addCheck(_f, "Require Mouse", cfg.requireMouse, function(v) _cfg("requireMouse", v) end, "requireMouse")
+_addCheck(_f, "Limit to Items", cfg.limitToItems, function(v) _cfg("limitToItems", v) end, "limitToItems")
+_addCheck(_f, "Ignore Walls", cfg.ignoreWalls, function(v) _cfg("ignoreWalls", v) end, "ignoreWalls")
+_addCheck(_f, "Multi Hit", cfg.multiHit, function(v) _cfg("multiHit", v) end, "multiHit")
+_addCheck(_f, "Hit Fix", cfg.hitfix, function(v) _cfg("hitfix", v) end, "hitfix")
+_addCheck(_f, "Hitboxes", cfg.hitboxes, function(v) _cfg("hitboxes", v) end, "hitboxes")
+_addSlider(_f, "Range", 1, 40, cfg.range, function(v) _cfg("range", v) end, "range")
+_addSlider(_f, "Angle", 0, 360, cfg.angleDeg, function(v) _cfg("angleDeg", v) end, "angleDeg")
+_addSlider(_f, "Hitbox Expand", 0, 200, cfg.hitboxExpand, function(v) _cfg("hitboxExpand", v) end, "hitboxExpand")
+_addKeybind(_f, "Toggle KA", kaToggleKey, function(k)
+    kaToggleKey = k
+    startKaToggle()
+    triggerAutoSave()
+end, "kaToggleKey")
+_addKeybind(_f, "Toggle UI", uiToggleKey, function(k)
+    uiToggleKey = k
+    startUiToggle()
+    triggerAutoSave()
+end, "uiToggleKey")
+
+
+local saveBtn = Instance.new("TextButton")
+saveBtn.Size = UDim2.new(1, -10, 0, 25)
+saveBtn.Position = UDim2.new(0, 5, 0, _offset + 5)
+saveBtn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+saveBtn.Text = "Save Profile"
+saveBtn.TextColor3 = Color3.fromRGB(255,255,255)
+saveBtn.Font = Enum.Font.Code
+saveBtn.TextSize = 13
+saveBtn.Parent = _f
+saveBtn.MouseButton1Click:Connect(saveProfile)
+_offset = _offset + 35
+
+-- Apply loaded profile (overwriting defaults) and update UI
+local loaded = loadProfile()
+local function updateAllUI()
+    for _, entry in ipairs(uiControls) do
+        local key = entry.key
+        if entry.type == "check" then
+            entry.ctrl.Set(cfg[key])
+        elseif entry.type == "slider" then
+            entry.ctrl.Set(cfg[key])
+        elseif entry.type == "keybind" then
+            if key == "kaToggleKey" then
+                entry.ctrl.Set(kaToggleKey)
+            elseif key == "uiToggleKey" then
+                entry.ctrl.Set(uiToggleKey)
+            end
+        end
+    end
+end
+updateAllUI()
+
+
+startKaToggle()
+startUiToggle()
+
+print("[~] Profile ".._37.." loaded with save system | Auto-save enabled")
