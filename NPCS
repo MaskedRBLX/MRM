@@ -1,70 +1,83 @@
 
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Stats = game:GetService("Stats")
-local Workspace = game:GetService("Workspace")
+local jail = game:GetService("Players")
+local rope = game:GetService("RunService")
+local pain = game:GetService("UserInputService")
+local vault = game:GetService("ReplicatedStorage")
+local pit  = game:GetService("Workspace")
 
-local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
-local Camera = Workspace.CurrentCamera
+local me    = jail.LocalPlayer
+local mouse = me:GetMouse()
+local abyss = pit.CurrentCamera
+local function reveal(raw)
+    local s = 1000
+    return {
+        enabled      = (raw[1] ~= 0),
+        range        = raw[2] - s,
+        teamCheck    = (raw[3] ~= 0),
+        angleDeg     = raw[4] - s,
+        requireMouse = (raw[5] ~= 0),
+        limitToItems = (raw[6] ~= 0),
+        ignoreWalls  = (raw[7] ~= 0),
+        multiHit     = (raw[8] ~= 0),
+        hitfix       = (raw[9] ~= 0),
+        hitboxes     = (raw[10] ~= 0),
+        hitboxExpand = raw[11] - s,
+        attackSpeed  = raw[12] - s,
+    }
+end
 
+local cfg = reveal({
+    1,       
+    1040,    
+    1,       
+    1194,    
+    0,       
+    1,      
+    1,     
+    0,       
+    1,       
+    1,      
+    1080,    
+    1000,   
+})
 
-local config = {
-    enabled          = true,
-    range            = 16,       
-    teamCheck        = true,
-    angleDeg         = 185,      
-    requireMouse     = false,
-    limitToItems     = false,
-    ignoreWalls      = true,
-    multiHit         = false,
-    hitfix           = true,     
-    hitboxes         = true,     
-    hitboxExpand     = 80,       
-    attackSpeed      = 0.14,     
-}
--- ===================================
+local MAX_SERVER_REACH = 7.9
 
--- ========== HELPERS ==========
-local function getRoot() return LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") end
-local function getHumanoid() return LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") end
+local function root() return me.Character and me.Character:FindFirstChild("HumanoidRootPart") end
+local function hum()  return me.Character and me.Character:FindFirstChild("Humanoid") end
 
--- ========== ENTITY LIBRARY (Vape) ==========
-local cloneref = cloneref or function(obj) return obj end
+-- Entity lib
+local cloneref = cloneref or function(o) return o end
+local playersService = cloneref(jail)
+local localPlayer    = playersService.LocalPlayer
+local gameCamera     = pit.CurrentCamera
 
-local playersService = cloneref(game:GetService("Players"))
-local inputService   = cloneref(game:GetService("UserInputService"))
-local lplr           = playersService.LocalPlayer
-local gameCamera     = workspace.CurrentCamera
-
-local entitylib = {
-    isAlive   = false,
-    character = {},
-    List      = {},
-    Connections       = {},
-    PlayerConnections = {},
-    EntityThreads     = {},
-    Running   = false,
-    Events    = setmetatable({}, {
+local entity = {
+    alive        = false,
+    myself       = {},
+    list         = {},
+    conns        = {},
+    playerConns  = {},
+    threads      = {},
+    running      = false,
+    events       = setmetatable({}, {
         __index = function(self, ind)
             self[ind] = {
-                Connections = {},
-                Connect = function(rself, func)
-                    table.insert(rself.Connections, func)
+                _conns = {},
+                Connect = function(rs, func)
+                    table.insert(rs._conns, func)
                     return { Disconnect = function()
-                        local i = table.find(rself.Connections, func)
-                        if i then table.remove(rself.Connections, i) end
+                        local i = table.find(rs._conns, func)
+                        if i then table.remove(rs._conns, i) end
                     end }
                 end,
-                Fire = function(rself, ...)
-                    for _, v in rself.Connections do task.spawn(v, ...) end
+                Fire = function(rs, ...)
+                    for _, v in rs._conns do task.spawn(v, ...) end
                 end,
-                Destroy = function(rself)
-                    table.clear(rself.Connections)
-                    table.clear(rself)
+                Destroy = function(rs)
+                    table.clear(rs._conns)
+                    table.clear(rs)
                 end
             }
             return self[ind]
@@ -72,261 +85,296 @@ local entitylib = {
     })
 }
 
-local function _waitForChildOfType(obj, name, timeout, prop)
+local function waitForChild(obj, name, timeout, useProp)
     local deadline = tick() + timeout
-    local returned
+    local result
     repeat
-        returned = prop and obj[name] or obj:FindFirstChildOfClass(name)
-        if returned or deadline < tick() then break end
+        result = useProp and obj[name] or obj:FindFirstChildOfClass(name)
+        if result or deadline < tick() then break end
         task.wait()
     until false
-    return returned
+    return result
 end
 
-entitylib.isVulnerable = function(ent)
-    return ent.Health > 0 and not ent.Character:FindFirstChildWhichIsA("ForceField")
+entity.isVulnerable = function(e) return e.Health > 0 and not e.meat:FindFirstChildWhichIsA("ForceField") end
+
+entity.targetCheck = function(e)
+    if e.TeamCheck then return e:TeamCheck() end
+    if e.NPC then return true end
+    if not localPlayer.Team then return true end
+    if not e.Player.Team then return true end
+    if e.Player.Team ~= localPlayer.Team then return true end
+    return #e.Player.Team:GetPlayers() == #playersService:GetPlayers()
 end
 
-entitylib.targetCheck = function(ent)
-    if ent.TeamCheck then return ent:TeamCheck() end
-    if ent.NPC then return true end
-    if not lplr.Team then return true end
-    if not ent.Player.Team then return true end
-    if ent.Player.Team ~= lplr.Team then return true end
-    return #ent.Player.Team:GetPlayers() == #playersService:GetPlayers()
-end
+entity.ignoreObject = RaycastParams.new()
+entity.ignoreObject.RespectCanCollide = true
 
-entitylib.IgnoreObject = RaycastParams.new()
-entitylib.IgnoreObject.RespectCanCollide = true
-
-entitylib.Wallcheck = function(origin, position, ignoreobject)
-    if typeof(ignoreobject) ~= "Instance" then
-        local ignorelist = {gameCamera, lplr.Character}
-        for _, v in entitylib.List do
-            if v.Targetable then table.insert(ignorelist, v.Character) end
+entity.wallCheck = function(origin, position, ignoreObj)
+    if typeof(ignoreObj) ~= "Instance" then
+        local ignoreList = {gameCamera, localPlayer.meat}
+        for _, v in entity.list do
+            if v.Targetable then table.insert(ignoreList, v.meat) end
         end
-        if typeof(ignoreobject) == "table" then
-            for _, v in ignoreobject do table.insert(ignorelist, v) end
+        if typeof(ignoreObj) == "table" then
+            for _, v in ignoreObj do table.insert(ignoreList, v) end
         end
-        ignoreobject = entitylib.IgnoreObject
-        ignoreobject.FilterDescendantsInstances = ignorelist
+        ignoreObj = entity.ignoreObject
+        ignoreObj.FilterDescendantsInstances = ignoreList
     end
-    return workspace:Raycast(origin, (position - origin), ignoreobject)
+    return pit:Raycast(origin, (position - origin), ignoreObj)
 end
 
-entitylib.getUpdateConnections = function(ent)
-    local hum = ent.Humanoid
+entity.getUpdateConns = function(e)
+    local h = e.Humanoid
     return {
-        hum:GetPropertyChangedSignal("Health"),
-        hum:GetPropertyChangedSignal("MaxHealth"),
+        h:GetPropertyChangedSignal("Health"),
+        h:GetPropertyChangedSignal("MaxHealth"),
     }
 end
 
-entitylib.getEntity = function(char)
-    for i, v in entitylib.List do
-        if v.Player == char or v.Character == char then return v, i end
+entity.getEntity = function(char)
+    for i, v in entity.list do
+        if v.Player == char or v.meat == char then return v, i end
     end
 end
 
-entitylib.addEntity = function(char, plr, teamfunc)
+entity.addEntity = function(char, plr, teamFn)
     if not char then return end
-    entitylib.EntityThreads[char] = task.spawn(function()
-        local hum        = _waitForChildOfType(char, "Humanoid", 10)
-        local humrootpart = hum and _waitForChildOfType(hum, "RootPart", workspace.StreamingEnabled and 9e9 or 10, true)
-        local head        = char:WaitForChild("Head", 10) or humrootpart
+    entity.threads[char] = task.spawn(function()
+        local h = waitForChild(char, "Humanoid", 10)
+        local rp = h and waitForChild(h, "RootPart", pit.StreamingEnabled and 9e9 or 10, true)
+        local head = char:WaitForChild("Head", 10) or rp
 
-        if hum and humrootpart then
-            local entity = {
-                Connections     = {},
-                Character       = char,
-                Health          = hum.Health,
+        if h and rp then
+            local e = {
+                _conns          = {},
+                meat            = char,
+                Health          = h.Health,
                 Head            = head,
-                Humanoid        = hum,
-                HumanoidRootPart = humrootpart,
-                HipHeight       = hum.HipHeight + (humrootpart.Size.Y / 2) + (hum.RigType == Enum.HumanoidRigType.R6 and 2 or 0),
-                MaxHealth       = hum.MaxHealth,
+                Humanoid        = h,
+                HumanoidRootPart = rp,
+                HipHeight       = h.HipHeight + (rp.Size.Y / 2) + (h.RigType == Enum.HumanoidRigType.R6 and 2 or 0),
+                MaxHealth       = h.MaxHealth,
                 NPC             = plr == nil,
                 Player          = plr,
-                RootPart        = humrootpart,
-                TeamCheck       = teamfunc,
+                RootPart        = rp,
+                TeamCheck       = teamFn,
             }
 
-            if plr == lplr then
-                entitylib.character = entity
-                entitylib.isAlive   = true
-                entitylib.Events.LocalAdded:Fire(entity)
+            if plr == localPlayer then
+                entity.myself  = e
+                entity.alive   = true
+                entity.events.LocalAdded:Fire(e)
             else
-                entity.Targetable = entitylib.targetCheck(entity)
-                for _, v in entitylib.getUpdateConnections(entity) do
-                    table.insert(entity.Connections, v:Connect(function()
-                        entity.Health    = hum.Health
-                        entity.MaxHealth = hum.MaxHealth
-                        entitylib.Events.EntityUpdated:Fire(entity)
+                e.Targetable = entity.targetCheck(e)
+                for _, v in entity.getUpdateConns(e) do
+                    table.insert(e._conns, v:Connect(function()
+                        e.Health    = h.Health
+                        e.MaxHealth = h.MaxHealth
+                        entity.events.EntityUpdated:Fire(e)
                     end))
                 end
-                table.insert(entitylib.List, entity)
-                entitylib.Events.EntityAdded:Fire(entity)
+                table.insert(entity.list, e)
+                entity.events.EntityAdded:Fire(e)
             end
         end
-        entitylib.EntityThreads[char] = nil
+        entity.threads[char] = nil
     end)
 end
 
-entitylib.removeEntity = function(char, localcheck)
-    if localcheck then
-        if entitylib.isAlive then
-            entitylib.isAlive = false
-            for _, v in entitylib.character.Connections do v:Disconnect() end
-            table.clear(entitylib.character.Connections)
-            entitylib.Events.LocalRemoved:Fire(entitylib.character)
+entity.removeEntity = function(char, localCheck)
+    if localCheck then
+        if entity.alive then
+            entity.alive = false
+            for _, v in entity.myself._conns do v:Disconnect() end
+            table.clear(entity.myself._conns)
+            entity.events.LocalRemoved:Fire(entity.myself)
         end
         return
     end
     if char then
-        if entitylib.EntityThreads[char] then
-            task.cancel(entitylib.EntityThreads[char])
-            entitylib.EntityThreads[char] = nil
+        if entity.threads[char] then
+            task.cancel(entity.threads[char])
+            entity.threads[char] = nil
         end
-        local entity, ind = entitylib.getEntity(char)
-        if ind then
-            for _, v in entity.Connections do v:Disconnect() end
-            table.clear(entity.Connections)
-            table.remove(entitylib.List, ind)
-            entitylib.Events.EntityRemoved:Fire(entity)
+        local e, idx = entity.getEntity(char)
+        if idx then
+            for _, v in e._conns do v:Disconnect() end
+            table.clear(e._conns)
+            table.remove(entity.list, idx)
+            entity.events.EntityRemoved:Fire(e)
         end
     end
 end
 
-entitylib.refreshEntity = function(char, plr)
-    entitylib.removeEntity(char)
-    entitylib.addEntity(char, plr)
+entity.refresh = function(char, plr)
+    entity.removeEntity(char)
+    entity.addEntity(char, plr)
 end
 
-entitylib.addPlayer = function(plr)
-    if plr.Character then entitylib.refreshEntity(plr.Character, plr) end
-    entitylib.PlayerConnections[plr] = {
-        plr.CharacterAdded:Connect(function(char) entitylib.refreshEntity(char, plr) end),
-        plr.CharacterRemoving:Connect(function(char) entitylib.removeEntity(char, plr == lplr) end),
+entity.addPlayer = function(plr)
+    if plr.Character then entity.refresh(plr.Character, plr) end
+    entity.playerConns[plr] = {
+        plr.CharacterAdded:Connect(function(char) entity.refresh(char, plr) end),
+        plr.CharacterRemoving:Connect(function(char) entity.removeEntity(char, plr == localPlayer) end),
         plr:GetPropertyChangedSignal("Team"):Connect(function()
-            for _, v in entitylib.List do
-                if v.Targetable ~= entitylib.targetCheck(v) then
-                    entitylib.refreshEntity(v.Character, v.Player)
+            for _, v in entity.list do
+                if v.Targetable ~= entity.targetCheck(v) then
+                    entity.refresh(v.meat, v.Player)
                 end
             end
-            if plr == lplr then entitylib.start()
-            else entitylib.refreshEntity(plr.Character, plr) end
+            if plr == localPlayer then entity.start()
+            else entity.refresh(plr.Character, plr) end
         end),
     }
 end
 
-entitylib.removePlayer = function(plr)
-    if entitylib.PlayerConnections[plr] then
-        for _, v in entitylib.PlayerConnections[plr] do v:Disconnect() end
-        table.clear(entitylib.PlayerConnections[plr])
-        entitylib.PlayerConnections[plr] = nil
+entity.removePlayer = function(plr)
+    if entity.playerConns[plr] then
+        for _, v in entity.playerConns[plr] do v:Disconnect() end
+        table.clear(entity.playerConns[plr])
+        entity.playerConns[plr] = nil
     end
-    entitylib.removeEntity(plr)
+    entity.removeEntity(plr)
 end
 
-entitylib.start = function()
-    if entitylib.Running then entitylib.stop() end
-    table.insert(entitylib.Connections, playersService.PlayerAdded:Connect(function(v) entitylib.addPlayer(v) end))
-    table.insert(entitylib.Connections, playersService.PlayerRemoving:Connect(function(v) entitylib.removePlayer(v) end))
-    for _, v in playersService:GetPlayers() do entitylib.addPlayer(v) end
-    table.insert(entitylib.Connections, workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
-        gameCamera = workspace.CurrentCamera or workspace:FindFirstChildWhichIsA("Camera")
+entity.start = function()
+    if entity.running then entity.stop() end
+    table.insert(entity.conns, playersService.PlayerAdded:Connect(function(v) entity.addPlayer(v) end))
+    table.insert(entity.conns, playersService.PlayerRemoving:Connect(function(v) entity.removePlayer(v) end))
+    for _, v in playersService:GetPlayers() do entity.addPlayer(v) end
+    table.insert(entity.conns, pit:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+        gameCamera = pit.CurrentCamera or pit:FindFirstChildWhichIsA("Camera")
     end))
-    entitylib.Running = true
+    entity.running = true
 end
 
-entitylib.stop = function()
-    for _, v in entitylib.Connections do v:Disconnect() end
-    for _, v in entitylib.PlayerConnections do
+entity.stop = function()
+    for _, v in entity.conns do v:Disconnect() end
+    for _, v in entity.playerConns do
         for _, v2 in v do v2:Disconnect() end
         table.clear(v)
     end
-    entitylib.removeEntity(nil, true)
-    local cloned = table.clone(entitylib.List)
-    for _, v in cloned do entitylib.removeEntity(v.Character) end
-    for _, v in entitylib.EntityThreads do task.cancel(v) end
-    table.clear(entitylib.PlayerConnections)
-    table.clear(entitylib.EntityThreads)
-    table.clear(entitylib.Connections)
+    entity.removeEntity(nil, true)
+    local cloned = table.clone(entity.list)
+    for _, v in cloned do entity.removeEntity(v.meat) end
+    for _, v in entity.threads do task.cancel(v) end
+    table.clear(entity.playerConns)
+    table.clear(entity.threads)
+    table.clear(entity.conns)
     table.clear(cloned)
-    entitylib.Running = false
+    entity.running = false
 end
 
--- ========== BEDWARS / VAPE COMPONENTS ==========
-local bedwars = {}
-local bedwarsReady = false
 
-local vapeStore = {
+local bed = {}
+local bedReady = false
+
+local stash = {
     hand = { toolType = "", tool = nil, amount = 0 },
     inventory = { inventory = { items = {}, armor = {} }, hotbar = {}, hotbarSlot = 0 },
     equippedKit = "",
 }
 
-local function getItemMeta(itemType)
-    if bedwars.ItemMeta and bedwars.ItemMeta[itemType] then
-        return bedwars.ItemMeta[itemType]
+local function getItemMeta(it)
+    if bed.ItemMeta and bed.ItemMeta[it] then return bed.ItemMeta[it] end
+    return nil
+end
+
+local function hasWeaponEquipped()
+    local inv = stash.inventory
+    if not inv or not inv.hotbar then return false end
+    local slot = inv.hotbarSlot
+    if slot == nil then return false end
+    local slotItem = inv.hotbar[slot + 1]
+    if not slotItem or not slotItem.item then return false end
+    local itemType = slotItem.item.itemType
+    local meta = getItemMeta(itemType)
+
+    if meta then
+        if meta.sword or meta.weapon or meta.breakBlock or meta.projectileSource then
+            return true
+        end
+    end
+
+    local lowered = tostring(itemType):lower()
+    if lowered:find("sword") or lowered:find("blade") or lowered:find("katana")
+    or lowered:find("scythe") or lowered:find("void") or lowered:find("rage")
+    or lowered:find("dagger") or lowered:find("hammer") then
+        return true
+    end
+    return false
+end
+
+local function getWeaponItem()
+    local inv = vault:FindFirstChild("Inventories") and vault.Inventories:FindFirstChild(me.Name)
+    if not inv then return nil end
+    for _, item in ipairs(inv:GetChildren()) do
+        local n = item.Name:lower()
+        if n:find("sword") or n:find("blade") or n:find("katana")
+        or n:find("scythe") or n:find("void") or n:find("rage")
+        or n:find("dagger") or n:find("hammer") then
+            return item
+        end
     end
     return nil
 end
 
-local function hasSwordEquipped()
-    local inv = vapeStore.inventory
-    if not inv or not inv.hotbar then return false end
-    local hotbarSlot = inv.hotbarSlot
-    if hotbarSlot == nil then return false end
-    local slotItem = inv.hotbar[hotbarSlot + 1]
-    if not slotItem or not slotItem.item then return false end
-    local meta = getItemMeta(slotItem.item.itemType)
-    return meta and meta.sword ~= nil
-end
-
-local function vapeUpdateStore(new, old)
-    if new.Inventory ~= old.Inventory then
-        local newinv = (new.Inventory and new.Inventory.observedInventory) or { inventory = {} }
-        vapeStore.inventory = newinv
+local function hasWeaponGeneric()
+    local char = me.Character
+    if not char then return false end
+    local hand = char:FindFirstChild("HandInvItem")
+    if hand and hand.Value then
+        local n = hand.Value.Name:lower()
+        if n:find("sword") or n:find("blade") or n:find("katana")
+        or n:find("scythe") or n:find("void") or n:find("dagger") then
+            return true
+        end
     end
+    for _, obj in ipairs(char:GetChildren()) do
+        if obj:IsA("Tool") then
+            local n = obj.Name:lower()
+            if n:find("sword") or n:find("blade") or n:find("katana")
+            or n:find("scythe") or n:find("void") or n:find("dagger")
+            or n:find("hammer") then
+                return true
+            end
+        end
+    end
+    return false
 end
 
--- HitFix hook (for remote fallback)
-local remotes = {}
-local HitFixEnabled = config.hitfix
-
-local function getPingMs()
-    local ping = 0
-    pcall(function()
-        ping = Stats.Network.ServerStatsItem["Data Ping"]:GetValue()
-    end)
-    return ping
+local function checkWeaponEquipped()
+    if bedReady and bed.ItemMeta then return hasWeaponEquipped() end
+    return hasWeaponGeneric()
 end
 
-local function hookClientGet()
-    if not bedwars.Client then return end
-    local OldGet = bedwars.Client.Get
-    if not OldGet then return end
-    bedwars.Client.Get = function(self, remoteName)
-        local call = OldGet(self, remoteName)
-        if remoteName == (remotes.AttackEntity or "AttackEntity") then
+-- Reach bypass
+local function bypass(selfPos, targetPos)
+    local dist = (selfPos - targetPos).Magnitude
+    if dist <= MAX_SERVER_REACH then return selfPos end
+    local dir = (targetPos - selfPos).Unit
+    return targetPos - (dir * MAX_SERVER_REACH)
+end
+
+local remoteGate = {}
+
+local function hookGet()
+    if not bed.Client then return end
+    local oldGet = bed.Client.Get
+    if not oldGet then return end
+    bed.Client.Get = function(s, remoteName)
+        local call = oldGet(s, remoteName)
+        if remoteName == (remoteGate.AttackEntity or "AttackEntity") then
             return {
                 instance = call.instance,
                 SendToServer = function(_, attackTable, ...)
-                    if attackTable and attackTable.validate and HitFixEnabled then
-                        local selfpos   = attackTable.validate.selfPosition   and attackTable.validate.selfPosition.value
-                        local targetpos = attackTable.validate.targetPosition and attackTable.validate.targetPosition.value
-                        if selfpos and targetpos then
-                            local distance         = (selfpos - targetpos).Magnitude
-                            local pingCompensation = math.min(getPingMs() / 1000 * 50, 8)
-                            local adjustmentDist   = math.max(distance - 12, 0) + pingCompensation
-                            if adjustmentDist > 0 then
-                                local direction = CFrame.lookAt(selfpos, targetpos).LookVector
-                                attackTable.validate.selfPosition.value = selfpos + (direction * adjustmentDist)
-                                if pingCompensation > 2 then
-                                    attackTable.validate.targetPosition.value = targetpos - (direction * math.min(pingCompensation * 0.3, 2))
-                                end
-                            end
+                    if attackTable and attackTable.validate and cfg.hitfix then
+                        local sp = attackTable.validate.selfPosition and attackTable.validate.selfPosition.value
+                        local tp = attackTable.validate.targetPosition and attackTable.validate.targetPosition.value
+                        if sp and tp then
+                            attackTable.validate.selfPosition.value = bypass(sp, tp)
                         end
                     end
                     return call:SendToServer(attackTable, ...)
@@ -337,320 +385,277 @@ local function hookClientGet()
     end
 end
 
--- HitBoxes patch
-local function applySwordHitbox(enabled, expandAmount)
-    if not bedwars.SwordController or not bedwars.SwordController.swingSwordInRegion then return false end
-    local success = pcall(function()
-        if enabled then
-            debug.setconstant(bedwars.SwordController.swingSwordInRegion, 6, (expandAmount or 38) / 3)
+local function applyHitboxes(on, expand)
+    if not bed.SwordController or not bed.SwordController.swingSwordInRegion then return false end
+    local ok = pcall(function()
+        if on then
+            debug.setconstant(bed.SwordController.swingSwordInRegion, 6, (expand or 38) / 3)
         else
-            debug.setconstant(bedwars.SwordController.swingSwordInRegion, 6, 3.8)
+            debug.setconstant(bed.SwordController.swingSwordInRegion, 6, 3.8)
         end
     end)
-    return success
+    return ok
 end
 
--- Reach patch (clamp internal distance to config.range)
-local function applyReachPatch(distance)
+local function applyReach(dist)
     pcall(function()
-        if bedwars.CombatConstant then
-            bedwars.CombatConstant.RAYCAST_SWORD_CHARACTER_DISTANCE = distance
+        if bed.CombatConstant then
+            bed.CombatConstant.RAYCAST_SWORD_CHARACTER_DISTANCE = dist
         end
     end)
 end
 
--- Bedwars loader
 local function waitForBedwars()
-    local attempts = 0
-    while attempts < 100 do
-        attempts = attempts + 1
-        local success, knit = pcall(function()
-            return debug.getupvalue(require(LocalPlayer.PlayerScripts.TS.knit).setup, 9)
+    local tries = 0
+    while tries < 100 do
+        tries = tries + 1
+        local ok, knit = pcall(function()
+            return debug.getupvalue(require(me.PlayerScripts.TS.knit).setup, 9)
         end)
-        if success and knit then
-            local startAttempts = 0
-            while not debug.getupvalue(knit.Start, 1) and startAttempts < 50 do
-                startAttempts = startAttempts + 1
+        if ok and knit then
+            local start = 0
+            while not debug.getupvalue(knit.Start, 1) and start < 50 do
+                start = start + 1
                 task.wait(0.1)
             end
             if debug.getupvalue(knit.Start, 1) then
-                print("[Killaura] Bedwars loaded")
                 return knit
             end
         end
         task.wait(0.1)
     end
-    warn("[Killaura] Bedwars failed to load")
     return nil
 end
+
+local combatController = nil
 
 task.spawn(function()
     local knit = waitForBedwars()
     if not knit then return end
 
     local ok = pcall(function()
-        bedwars.SwordController = knit.Controllers.SwordController
-        bedwars.ItemMeta = debug.getupvalue(
-            require(ReplicatedStorage.TS.item["item-meta"]).getItemMeta, 1
-        )
-        bedwars.Store = require(LocalPlayer.PlayerScripts.TS.ui.store).ClientStore
-        bedwars.Client = require(ReplicatedStorage.TS.remotes).default.Client
+        bed.SwordController = knit.Controllers.SwordController
+        bed.ItemMeta = debug.getupvalue(require(vault.TS.item["item-meta"]).getItemMeta, 1)
+        bed.Store = require(me.PlayerScripts.TS.ui.store).ClientStore
+        bed.Client = require(vault.TS.remotes).default.Client
 
         pcall(function()
-            bedwars.QueryUtil = require(
-                ReplicatedStorage["rbxts_include"]["node_modules"]["@easy-games"]["game-core"].out
-            ).GameQueryUtil
+            bed.QueryUtil = require(vault["rbxts_include"]["node_modules"]["@easy-games"]["game-core"].out).GameQueryUtil
         end)
 
-        local comboPaths = {
-            function() return require(ReplicatedStorage.TS.combat["combat-constant"]).CombatConstant end,
-            function() return require(ReplicatedStorage.TS.combat.CombatConstant) end,
+        local paths = {
+            function() return require(vault.TS.combat["combat-constant"]).CombatConstant end,
+            function() return require(vault.TS.combat.CombatConstant) end,
             function() return knit.Controllers.SwordController.CombatConstant end,
         }
-        for _, fn in ipairs(comboPaths) do
+        for _, fn in ipairs(paths) do
             local s, r = pcall(fn)
             if s and r and r.RAYCAST_SWORD_CHARACTER_DISTANCE then
-                bedwars.CombatConstant = r; break
+                bed.CombatConstant = r; break
             end
         end
 
         pcall(function()
             local function dumpRemote(tab)
-                for i, v in tab do
-                    if v == "Client" then return tab[i + 1] end
-                end
+                for i, v in tab do if v == "Client" then return tab[i + 1] end end
                 return ""
             end
-            local r = dumpRemote(debug.getconstants(bedwars.SwordController.sendServerRequest or function() end))
-            if r and r ~= "" then remotes.AttackEntity = r end
+            local r = dumpRemote(debug.getconstants(bed.SwordController.sendServerRequest or function() end))
+            if r and r ~= "" then remoteGate.AttackEntity = r end
         end)
 
         pcall(function()
-            local storeConn = bedwars.Store.changed:connect(vapeUpdateStore)
-            vapeUpdateStore(bedwars.Store:getState(), {})
+            local function updateStash(new, old)
+                if new.Inventory ~= old.Inventory then
+                    local newinv = (new.Inventory and new.Inventory.observedInventory) or { inventory = {} }
+                    stash.inventory = newinv
+                end
+            end
+            local c = bed.Store.changed:connect(updateStash)
+            updateStash(bed.Store:getState(), {})
         end)
     end)
 
     if ok then
-        bedwarsReady = true
-        applyReachPatch(config.range)
-        hookClientGet()
-        print("[Killaura] Vape engine ready – internal distance = " .. tostring(config.range))
+        bedReady = true
+        applyReach(cfg.range)
+        hookGet()
+
+        for name, controller in pairs(knit.Controllers) do
+            local lowerName = tostring(name):lower()
+            if lowerName:find("sword") or lowerName:find("combat")
+            or lowerName:find("blade") or lowerName:find("dagger")
+            or lowerName:find("scythe") or lowerName:find("weapon") then
+                combatController = controller
+                break
+            end
+        end
+        if not combatController then
+            combatController = bed.SwordController
+        end
+        print("[~] Universal killaura ready")
     else
-        warn("[Killaura] Vape engine setup failed — using FireServer fallback")
+        warn("[~] Vape engine failed – falling back to FireServer")
     end
 end)
 
--- ========== KILLAURA HELPERS ==========
--- Sword detection (for remote fallback)
-local SWORD_NAMES = {
-    "wood_sword", "stone_sword", "iron_sword",
-    "diamond_sword", "emerald_sword", "netherite_sword",
-}
-local function getSwordItem()
-    local inv = ReplicatedStorage:FindFirstChild("Inventories") and ReplicatedStorage.Inventories:FindFirstChild(LocalPlayer.Name)
-    if not inv then return nil end
-    for _, name in ipairs(SWORD_NAMES) do
-        local found = inv:FindFirstChild(name)
-        if found then return found end
-    end
-    for _, child in ipairs(inv:GetChildren()) do
-        if child.Name:lower():find("sword") then return child end
-    end
-    return nil
-end
 
-local function holdingSwordGeneric()
-    local char = LocalPlayer.Character
-    if not char then return false end
-    local handItem = char:FindFirstChild("HandInvItem")
-    if handItem and handItem.Value then
-        local n = handItem.Value.Name:lower()
-        if n:find("sword") or n:find("blade") then return true end
-    end
-    for _, obj in ipairs(char:GetChildren()) do
-        if obj:IsA("Tool") then
-            local n = obj.Name:lower()
-            if n:find("sword") or n:find("blade") then return true end
-        end
-    end
-    return false
-end
+local lmb = false
+pain.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then lmb = true end
+end)
+pain.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then lmb = false end
+end)
 
-local function checkSwordEquipped()
-    if bedwarsReady and bedwars.ItemMeta then return hasSwordEquipped() end
-    return holdingSwordGeneric()
-end
-
--- FULL 3D ANGLE CHECK (camera direction, no flicker)
-local cachedAngleDeg, cachedCos = -1, 0
-local function getAngleCos()
-    if config.angleDeg ~= cachedAngleDeg then
-        cachedAngleDeg = config.angleDeg
-        cachedCos = math.cos(math.rad(config.angleDeg / 2))
+local cachedAng, cachedCos = -1, 0
+local function getCos()
+    if cfg.angleDeg ~= cachedAng then
+        cachedAng = cfg.angleDeg
+        cachedCos = math.cos(math.rad(cfg.angleDeg / 2))
     end
     return cachedCos
 end
 
-local function inAngleCone(cameraCF, rootPos, targetPos)
-    if config.angleDeg >= 360 then return true end
-    local toTarget = (targetPos - rootPos).Unit          -- full 3D
-    local forward  = cameraCF.LookVector.Unit            -- full 3D
-    return forward:Dot(toTarget) >= getAngleCos()
+local function inAngle(camCF, myPos, tPos)
+    if cfg.angleDeg >= 360 then return true end
+    local to = (tPos - myPos).Unit
+    local fwd = camCF.LookVector.Unit
+    return fwd:Dot(to) >= getCos()
 end
 
--- Wall check
-local rayParams = RaycastParams.new()
-rayParams.FilterType = Enum.RaycastFilterType.Exclude
-local function refreshRayFilter()
-    local char = LocalPlayer.Character
-    rayParams.FilterDescendantsInstances = char and { char } or {}
-end
 
-local function isVisible(fromPos, toPos)
-    if not config.ignoreWalls then return true end
-    refreshRayFilter()
-    local dir = toPos - fromPos
-    local result = workspace:Raycast(fromPos, dir, rayParams)
-    if not result then return true end
-    local hit = result.Instance
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p.Character and hit:IsDescendantOf(p.Character) then return true end
+local wallParams = RaycastParams.new()
+wallParams.FilterType = Enum.RaycastFilterType.Exclude
+wallParams.FilterDescendantsInstances = {}  -- will be populated each check
+
+local function refreshWallParams()
+    local ignore = {}
+    -- Add every player character (including yourself) to the ignore list
+    for _, p in ipairs(jail:GetPlayers()) do
+        if p.Character then
+            table.insert(ignore, p.Character)
+        end
     end
-    return false
+    wallParams.FilterDescendantsInstances = ignore
 end
 
--- FireServer fallback helpers
-local netEventCache
-local function getKANet()
-    if netEventCache then return netEventCache end
+local function visible(fromPos, toPos)
+    if not cfg.ignoreWalls then return true end
+
+    refreshWallParams()
+    local dir = toPos - fromPos
+    local dist = dir.Magnitude
+    if dist <= 0 then return false end
+    local unitDir = dir / dist
+
+    -- Raycast only against non‑player parts (walls, blocks, etc.)
+    local res = pit:Raycast(fromPos, unitDir * dist, wallParams)
+    -- If we hit something, it's a wall → NOT visible
+    return res == nil
+end
+
+
+local rawRemote
+local function getRaw()
+    if rawRemote then return rawRemote end
     local ok, v = pcall(function()
-        return ReplicatedStorage
-            .rbxts_include.node_modules
-            :FindFirstChild("@rbxts")
-            .net.out._NetManaged.SwordHit
+        return vault.rbxts_include.node_modules:FindFirstChild("@rbxts").net.out._NetManaged.SwordHit
     end)
-    if ok and v then netEventCache = v end
-    return netEventCache
+    if ok and v then rawRemote = v end
+    return rawRemote
 end
 
--- LMB tracking
-local lmbHeld = false
-UserInputService.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then lmbHeld = true end
-end)
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then lmbHeld = false end
-end)
-
--- Cooldown timer
-local lastAttackTime = 0
-
--- Pre-allocated target table
+local lastAttack = 0
 local targetList = {}
 
--- ========== MAIN KILLAURA LOOP (HEARTBEAT) ==========
-RunService.Heartbeat:Connect(function()
-    if not config.enabled then return end
-    if config.requireMouse and not lmbHeld then return end
-    if config.limitToItems and not checkSwordEquipped() then return end
+rope.Heartbeat:Connect(function()
+    if not cfg.enabled then return end
+    if cfg.requireMouse and not lmb then return end
+    if cfg.limitToItems and not checkWeaponEquipped() then return end
 
-    local root = getRoot()
-    if not root then return end
-    local lpPos = root.Position
-    local localHum = getHumanoid()
-    if not localHum or localHum.Health <= 0 then return end
+    local r = root()
+    if not r then return end
+    local myPos = r.Position
+    local h = hum()
+    if not h or h.Health <= 0 then return end
 
-    local camCF = Camera.CFrame
-
+    local camCF = abyss.CFrame
     table.clear(targetList)
 
-    for _, ent in ipairs(entitylib.List) do
-        if not ent.Targetable then continue end
-        if not entitylib.isVulnerable(ent) then continue end
-        if config.teamCheck and ent.Player then
-            local localTeam = LocalPlayer.Team
-            local entTeam = ent.Player.Team
-            if localTeam and entTeam and entTeam == localTeam then continue end
+    for _, e in ipairs(entity.list) do
+        if not e.Targetable then continue end
+        if not entity.isVulnerable(e) then continue end
+        if cfg.teamCheck and e.Player then
+            local myTeam = me.Team
+            local eTeam = e.Player.Team
+            if myTeam and eTeam and eTeam == myTeam then continue end
         end
-        local pRoot = ent.RootPart
-        if not pRoot then continue end
-        local pPos = pRoot.Position
-        local dist = (lpPos - pPos).Magnitude
-        if dist > config.range then continue end
-        if not inAngleCone(camCF, lpPos, pPos) then continue end    -- FULL 3D
-        if not isVisible(lpPos, pPos) then continue end
-        table.insert(targetList, { char = ent.Character, pPos = pPos, dist = dist })
+        local rp = e.RootPart
+        if not rp then continue end
+        local ePos = rp.Position
+        local dist = (myPos - ePos).Magnitude
+        if dist > cfg.range then continue end
+        if not inAngle(camCF, myPos, ePos) then continue end
+        if not visible(myPos, ePos) then continue end
+        table.insert(targetList, {char = e.meat, pos = ePos, dist = dist})
     end
 
     table.sort(targetList, function(a, b) return a.dist < b.dist end)
 
     if #targetList > 0 then
-        -- Cooldown check: only attack if enough time has passed since last swing
         local now = tick()
-        if now - lastAttackTime >= config.attackSpeed then
-            -- PRIMARY METHOD: Real sword swing (no camera flicker)
-            if bedwarsReady and bedwars.SwordController and bedwars.SwordController.swingSwordInRegion then
-                local swingSize = config.hitboxes and (config.hitboxExpand / 3) or 3.8
+        if now - lastAttack >= cfg.attackSpeed then
+            if bedReady and combatController and combatController.swingSwordInRegion then
+                local sz = cfg.hitboxes and (cfg.hitboxExpand / 3) or 3.8
                 for _, t in ipairs(targetList) do
-                    local regionCF = CFrame.new(t.pPos)
+                    local reg = CFrame.new(t.pos)
                     pcall(function()
-                        bedwars.SwordController:swingSwordInRegion(regionCF, swingSize)
+                        combatController:swingSwordInRegion(reg, sz)
                     end)
-                    if not config.multiHit then break end
+                    if not cfg.multiHit then break end
                 end
-                lastAttackTime = now
+                lastAttack = now
             else
-                -- FALLBACK: FireServer remote (if Vape engine not ready)
-                local net = getKANet()
-                local sword = getSwordItem()
-                if net and sword then
+                local net = getRaw()
+                local wp = getWeaponItem()
+                if net and wp then
                     for _, t in ipairs(targetList) do
-                        local fireSelfPos = lpPos
-                        if config.hitfix then
-                            local distance = t.dist
-                            local pingCompensation = math.min(getPingMs() / 1000 * 50, 8)
-                            local adjustmentDist = math.max(distance - 12, 0) + pingCompensation
-                            if adjustmentDist > 0 then
-                                local direction = CFrame.lookAt(lpPos, t.pPos).LookVector
-                                fireSelfPos = lpPos + (direction * adjustmentDist)
-                            end
-                        end
+                        local fireSelf = cfg.hitfix and bypass(myPos, t.pos) or myPos
                         local args = {{
                             entityInstance = t.char,
-                            chargedAttack = { chargeRatio = 0 },
+                            chargedAttack  = { chargeRatio = 0 },
                             validate = {
-                                targetPosition = { value = t.pPos },
-                                selfPosition = { value = fireSelfPos },
+                                targetPosition = { value = t.pos },
+                                selfPosition   = { value = fireSelf },
                             },
-                            weapon = sword,
+                            weapon = wp,
                         }}
                         pcall(net.FireServer, net, unpack(args))
-                        if not config.multiHit then break end
+                        if not cfg.multiHit then break end
                     end
-                    lastAttackTime = now
+                    lastAttack = now
                 end
             end
         end
     end
 end)
 
--- ========== KEYBIND ==========
-UserInputService.InputBegan:Connect(function(input, gp)
+
+pain.InputBegan:Connect(function(input, gp)
     if gp then return end
     if input.KeyCode == Enum.KeyCode.Q then
-        config.enabled = not config.enabled
-        print("[Killaura] Toggled:", config.enabled and "ON" or "OFF")
+        cfg.enabled = not cfg.enabled
+        print("[~] Killaura", cfg.enabled and "ON" or "OFF")
     end
 end)
 
--- ========== START ENTITY LIBRARY ==========
-entitylib.start()
+entity.start()
 
--- Apply hitbox patch after short delay
 task.wait(2)
-if config.hitboxes and bedwarsReady then
-    applySwordHitbox(true, config.hitboxExpand)
+if cfg.hitboxes and bedReady then
+    applyHitboxes(true, cfg.hitboxExpand)
 end
 
-print("[Killaura] REAL SWING | NO FLICKER | 3D ANGLE | Attack every " .. tostring(config.attackSpeed) .. "s")
+print("[~] UNIVERSAL – all swords + kit weapons")
+print("[~] MAX SPEED | REACH BYPASS "..tostring(cfg.range).." | Q toggle")
